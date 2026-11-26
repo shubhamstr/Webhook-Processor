@@ -12,6 +12,7 @@ describe('EventsController', () => {
   const mockEventsService = {
     findAll: jest.fn(),
     findOne: jest.fn(),
+    findAttempts: jest.fn(),
     retry: jest.fn(),
   };
 
@@ -95,6 +96,32 @@ describe('EventsController', () => {
 
       expect(service.findOne).toHaveBeenCalledWith(eventId);
       expect(result).toEqual(expectedEvent);
+    });
+  });
+
+  describe('findAttempts', () => {
+    it('should return attempt history for an event', async () => {
+      const eventId = 'evt_123';
+      const expectedAttempts = [
+        {
+          id: 'attempt-uuid-1',
+          eventId: 'uuid-1',
+          attemptNumber: 1,
+          retryCycle: 1,
+          workerId: 'worker-1',
+          startedAt: new Date(),
+          finishedAt: new Date(),
+          result: 'failure',
+          error: 'Connection timeout',
+        },
+      ];
+
+      mockEventsService.findAttempts.mockResolvedValue(expectedAttempts);
+
+      const result = await controller.findAttempts(eventId);
+
+      expect(service.findAttempts).toHaveBeenCalledWith(eventId);
+      expect(result).toEqual(expectedAttempts);
     });
   });
 

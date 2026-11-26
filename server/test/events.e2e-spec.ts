@@ -55,6 +55,22 @@ describe('EventsController (e2e)', () => {
         },
       ],
     });
+
+    const event3 = await prisma.webhookEvent.findUnique({
+      where: { eventId: testEventId3 },
+    });
+    if (event3) {
+      await prisma.processingAttempt.create({
+        data: {
+          eventId: event3.id,
+          attemptNumber: 1,
+          retryCycle: 1,
+          workerId: 'worker-test',
+          result: 'failure',
+          error: 'Simulated payment processing error',
+        },
+      });
+    }
   });
 
   afterAll(async () => {
@@ -160,6 +176,36 @@ describe('EventsController (e2e)', () => {
     it('should return 404 Not Found for non-existent event', async () => {
       await request(app.getHttpServer())
         .get('/events/evt_non_existent_9999999')
+        .expect(404);
+    });
+  });
+
+  describe('GET /events/:id/attempts', () => {
+    it('should return attempt history for an event by eventId', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/events/${testEventId3}/attempts`)
+        .expect(200);
+
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBeGreaterThanOrEqual(1);
+      expect(response.body[0]).toHaveProperty('attemptNumber', 1);
+      expect(response.body[0]).toHaveProperty('workerId', 'worker-test');
+      expect(response.body[0]).toHaveProperty('result', 'failure');
+      expect(response.body[0]).toHaveProperty('error', 'Simulated payment processing error');
+    });
+
+    it('should return empty array for an event with no attempts', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/events/${testEventId1}/attempts`)
+        .expect(200);
+
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body).toEqual([]);
+    });
+
+    it('should return 404 Not Found for non-existent event when fetching attempts', async () => {
+      await request(app.getHttpServer())
+        .get('/events/evt_non_existent_9999999/attempts')
         .expect(404);
     });
   });

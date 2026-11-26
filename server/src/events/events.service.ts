@@ -134,6 +134,24 @@ export class EventsService {
       }),
     ]);
 
+    // Deduplicate processing attempts if any duplicate records exist
+    events.forEach((event) => {
+      if (event.processingAttempts && event.processingAttempts.length > 0) {
+        const seenIds = new Set<string>();
+        const seenAttemptKeys = new Set<string>();
+        event.processingAttempts = event.processingAttempts.filter((att) => {
+          if (seenIds.has(att.id)) return false;
+          seenIds.add(att.id);
+
+          const attemptKey = `${att.retryCycle}_${att.attemptNumber}`;
+          if (seenAttemptKeys.has(attemptKey)) return false;
+          seenAttemptKeys.add(attemptKey);
+
+          return true;
+        });
+      }
+    });
+
     const totalPages = Math.ceil(total / limit);
 
     return {
@@ -175,7 +193,65 @@ export class EventsService {
       throw new NotFoundException(`Event with ID '${id}' not found`);
     }
 
+    // Deduplicate processingAttempts if any duplicate records exist
+    if (event.processingAttempts && event.processingAttempts.length > 0) {
+      const seenIds = new Set<string>();
+      const seenAttemptKeys = new Set<string>();
+      event.processingAttempts = event.processingAttempts.filter((att) => {
+        if (seenIds.has(att.id)) return false;
+        seenIds.add(att.id);
+
+        const attemptKey = `${att.retryCycle}_${att.attemptNumber}`;
+        if (seenAttemptKeys.has(attemptKey)) return false;
+        seenAttemptKeys.add(attemptKey);
+
+        return true;
+      });
+    }
+
     return event;
+  }
+
+  async findAttempts(id: string) {
+    const isUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        id,
+      );
+
+    const event = await this.prisma.webhookEvent.findFirst({
+      where: isUuid
+        ? {
+            OR: [{ id }, { eventId: id }],
+          }
+        : { eventId: id },
+      select: { id: true },
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Event with ID '${id}' not found`);
+    }
+
+    const attempts = await this.prisma.processingAttempt.findMany({
+      where: { eventId: event.id },
+      orderBy: [
+        { attemptNumber: 'asc' },
+        { startedAt: 'asc' },
+      ],
+    });
+
+    // Deduplicate attempts by id and (retryCycle, attemptNumber) to prevent any duplicate data
+    const seenIds = new Set<string>();
+    const seenAttemptKeys = new Set<string>();
+    return attempts.filter((att) => {
+      if (seenIds.has(att.id)) return false;
+      seenIds.add(att.id);
+
+      const attemptKey = `${att.retryCycle}_${att.attemptNumber}`;
+      if (seenAttemptKeys.has(attemptKey)) return false;
+      seenAttemptKeys.add(attemptKey);
+
+      return true;
+    });
   }
 
   async retry(id: string) {

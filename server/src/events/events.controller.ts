@@ -19,6 +19,11 @@ export class EventsController {
     return this.eventsService.findAll(query);
   }
 
+  @Get(':id/attempts')
+  async findAttempts(@Param('id') id: string) {
+    return this.eventsService.findAttempts(id);
+  }
+
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.eventsService.findOne(id);

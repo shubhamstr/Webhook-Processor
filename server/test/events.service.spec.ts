@@ -16,6 +16,9 @@ describe('EventsService', () => {
       findFirst: jest.fn(),
       update: jest.fn(),
     },
+    processingAttempt: {
+      findMany: jest.fn(),
+    },
   };
 
   beforeEach(async () => {
@@ -233,6 +236,120 @@ describe('EventsService', () => {
       await expect(service.findOne('evt_non_existent')).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  describe('findAttempts', () => {
+    it('should return attempts for event by eventId string', async () => {
+      const mockEvent = { id: '992a54fb-5246-4ad1-a96c-b26a6dbbb0fa' };
+      const mockAttempts = [
+        {
+          id: 'attempt-1',
+          eventId: mockEvent.id,
+          attemptNumber: 1,
+          retryCycle: 1,
+          workerId: 'worker-1',
+          startedAt: new Date('2026-11-26T10:00:00Z'),
+          finishedAt: new Date('2026-11-26T10:00:01Z'),
+          result: 'failure',
+          error: 'Timeout error',
+        },
+        {
+          id: 'attempt-2',
+          eventId: mockEvent.id,
+          attemptNumber: 2,
+          retryCycle: 1,
+          workerId: 'worker-2',
+          startedAt: new Date('2026-11-26T10:01:00Z'),
+          finishedAt: new Date('2026-11-26T10:01:01Z'),
+          result: 'success',
+          error: null,
+        },
+      ];
+
+      mockPrismaService.webhookEvent.findFirst.mockResolvedValue(mockEvent);
+      mockPrismaService.processingAttempt.findMany.mockResolvedValue(mockAttempts);
+
+      const result = await service.findAttempts('evt_custom_1');
+
+      expect(prisma.webhookEvent.findFirst).toHaveBeenCalledWith({
+        where: { eventId: 'evt_custom_1' },
+        select: { id: true },
+      });
+      expect(prisma.processingAttempt.findMany).toHaveBeenCalledWith({
+        where: { eventId: mockEvent.id },
+        orderBy: [{ attemptNumber: 'asc' }, { startedAt: 'asc' }],
+      });
+      expect(result).toEqual(mockAttempts);
+    });
+
+    it('should throw NotFoundException if event does not exist when fetching attempts', async () => {
+      mockPrismaService.webhookEvent.findFirst.mockResolvedValue(null);
+
+      await expect(service.findAttempts('evt_non_existent')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should deduplicate any duplicate attempt records', async () => {
+      const mockEvent = { id: '992a54fb-5246-4ad1-a96c-b26a6dbbb0fa' };
+      const mockAttemptsWithDuplicates = [
+        {
+          id: 'attempt-1',
+          eventId: mockEvent.id,
+          attemptNumber: 1,
+          retryCycle: 1,
+          workerId: 'worker-1',
+          startedAt: new Date('2026-11-26T10:00:00Z'),
+          finishedAt: new Date('2026-11-26T10:00:01Z'),
+          result: 'failure',
+          error: 'Timeout error',
+        },
+        {
+          // Duplicate id
+          id: 'attempt-1',
+          eventId: mockEvent.id,
+          attemptNumber: 1,
+          retryCycle: 1,
+          workerId: 'worker-1',
+          startedAt: new Date('2026-11-26T10:00:00Z'),
+          finishedAt: new Date('2026-11-26T10:00:01Z'),
+          result: 'failure',
+          error: 'Timeout error',
+        },
+        {
+          // Duplicate retryCycle & attemptNumber
+          id: 'attempt-1-duplicate',
+          eventId: mockEvent.id,
+          attemptNumber: 1,
+          retryCycle: 1,
+          workerId: 'worker-2',
+          startedAt: new Date('2026-11-26T10:00:05Z'),
+          finishedAt: new Date('2026-11-26T10:00:06Z'),
+          result: 'failure',
+          error: 'Timeout error',
+        },
+        {
+          id: 'attempt-2',
+          eventId: mockEvent.id,
+          attemptNumber: 2,
+          retryCycle: 1,
+          workerId: 'worker-2',
+          startedAt: new Date('2026-11-26T10:01:00Z'),
+          finishedAt: new Date('2026-11-26T10:01:01Z'),
+          result: 'success',
+          error: null,
+        },
+      ];
+
+      mockPrismaService.webhookEvent.findFirst.mockResolvedValue(mockEvent);
+      mockPrismaService.processingAttempt.findMany.mockResolvedValue(mockAttemptsWithDuplicates);
+
+      const result = await service.findAttempts('evt_custom_1');
+
+      expect(result).toHaveLength(2);
+      expect(result[0].id).toBe('attempt-1');
+      expect(result[1].id).toBe('attempt-2');
     });
   });
 
