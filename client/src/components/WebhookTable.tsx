@@ -56,13 +56,21 @@ export const WebhookTable: React.FC<WebhookTableProps> = ({
     if (!isoString) return '-';
     try {
       const d = new Date(isoString);
-      return d.toLocaleString(undefined, {
+      if (isNaN(d.getTime())) return isoString;
+
+      // Database and API maintain all timestamps in Indian Standard Time (IST, UTC+05:30).
+      // Formatting with timeZone: 'UTC' preserves the exact stored IST date and time
+      // components consistently across any client browser locale or SSR.
+      const formatted = d.toLocaleString('en-IN', {
+        timeZone: 'UTC',
         month: 'short',
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
+        hour12: true,
       });
+      return `${formatted} IST`;
     } catch {
       return isoString;
     }
@@ -109,7 +117,7 @@ export const WebhookTable: React.FC<WebhookTableProps> = ({
               <th className="py-3 px-4">Type</th>
               <th className="py-3 px-4">Current State</th>
               <th className="py-3 px-4">Attempt Count</th>
-              <th className="py-3 px-4">Received At</th>
+              <th className="py-3 px-4">Received At (IST)</th>
               <th className="py-3 px-4">Order ID</th>
               <th className="py-3 px-4">Customer ID</th>
               <th className="py-3 px-4 text-right">Action</th>
@@ -322,6 +330,31 @@ export const WebhookTable: React.FC<WebhookTableProps> = ({
                                         <span>Refresh APIs</span>
                                       </button>
                                     </div>
+                                  </div>
+
+                                  {/* Timestamp Ribbon (IST) */}
+                                  <div className="flex flex-wrap items-center gap-x-6 gap-y-2 py-2 px-3 rounded-lg bg-gray-50 border border-gray-200 text-xs">
+                                    <div className="flex items-center gap-1.5">
+                                      <Clock className="w-3.5 h-3.5 text-blue-600" />
+                                      <span className="text-gray-500 font-medium">Received (IST):</span>
+                                      <span className="font-mono text-gray-900 font-semibold">
+                                        {formatDate(apiEvent.receivedAt || apiEvent.createdAt)}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-gray-500 font-medium">Updated (IST):</span>
+                                      <span className="font-mono text-gray-800">
+                                        {formatDate(apiEvent.updatedAt)}
+                                      </span>
+                                    </div>
+                                    {apiEvent.nextAttemptAt && (
+                                      <div className="flex items-center gap-1.5 text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                        <span className="font-medium">Next Attempt (IST):</span>
+                                        <span className="font-mono font-semibold">
+                                          {formatDate(apiEvent.nextAttemptAt)}
+                                        </span>
+                                      </div>
+                                    )}
                                   </div>
 
                                   {/* Error Banner if error exists */}

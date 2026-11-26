@@ -3,7 +3,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ============================================================================
 -- Table 1: webhook_events
--- Main event storage and queue table
+-- Main event storage and queue table (Timestamps maintained in IST: Asia/Kolkata)
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS webhook_events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -14,13 +14,13 @@ CREATE TABLE IF NOT EXISTS webhook_events (
     total_attempts INTEGER NOT NULL DEFAULT 0,
     cycle_attempts INTEGER NOT NULL DEFAULT 0,
     max_attempts INTEGER NOT NULL DEFAULT 5,
-    next_attempt_at TIMESTAMPTZ,
+    next_attempt_at TIMESTAMP,
     lease_owner VARCHAR(255),
     lease_token UUID,
-    lease_expires_at TIMESTAMPTZ,
+    lease_expires_at TIMESTAMP,
     last_error TEXT,
-    received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    received_at TIMESTAMP NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Kolkata'),
+    updated_at TIMESTAMP NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Kolkata')
 );
 
 -- Queue polling & worker lease indexes
@@ -32,7 +32,7 @@ CREATE INDEX IF NOT EXISTS idx_webhook_events_lease
 
 -- ============================================================================
 -- Table 2: processing_attempts
--- Tracks every processing attempt across workers and retry cycles
+-- Tracks every processing attempt across workers and retry cycles (Timestamps in IST)
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS processing_attempts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -40,8 +40,8 @@ CREATE TABLE IF NOT EXISTS processing_attempts (
     attempt_number INTEGER NOT NULL,
     retry_cycle INTEGER NOT NULL DEFAULT 1,
     worker_id VARCHAR(255) NOT NULL,
-    started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    finished_at TIMESTAMPTZ,
+    started_at TIMESTAMP NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Kolkata'),
+    finished_at TIMESTAMP,
     result VARCHAR(50), -- success, failure, abandoned
     error TEXT
 );
@@ -54,12 +54,12 @@ CREATE INDEX IF NOT EXISTS idx_processing_attempts_worker_id
 
 -- ============================================================================
 -- Table 3: processed_orders
--- Assessment-specific idempotency & business operation verification table
+-- Assessment-specific idempotency & business operation verification table (Timestamps in IST)
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS processed_orders (
     order_id VARCHAR(255) NOT NULL,
     event_id UUID NOT NULL UNIQUE REFERENCES webhook_events(id) ON DELETE CASCADE,
-    processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    processed_at TIMESTAMP NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Kolkata'),
     PRIMARY KEY (event_id)
 );
 

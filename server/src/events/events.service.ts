@@ -7,6 +7,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma';
 import { GetEventsQueryDto } from './dto';
+import { getISTDate } from '../common/time.utils';
 
 export interface DashboardStatsResponse {
   total: number;
@@ -279,17 +280,18 @@ export class EventsService {
       );
     }
 
+    const istNow = getISTDate();
     const updated = await this.prisma.webhookEvent.update({
       where: { id: event.id },
       data: {
         status: 'pending',
         cycleAttempts: 0,
-        nextAttemptAt: new Date(),
+        nextAttemptAt: istNow,
         leaseOwner: null,
         leaseToken: null,
         leaseExpiresAt: null,
         lastError: null,
-        updatedAt: new Date(),
+        updatedAt: istNow,
       },
       include: {
         processingAttempts: {

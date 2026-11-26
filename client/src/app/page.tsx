@@ -305,9 +305,14 @@ export default function WebhookProcessorDashboard() {
         {/* Header without manual refresh button */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-200">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Webhook Processor</h1>
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-2xl font-bold text-gray-900">Webhook Processor</h1>
+              <span className="text-[11px] font-medium font-mono px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
+                Timezone: IST (UTC+05:30)
+              </span>
+            </div>
             <p className="text-sm text-gray-500 mt-1">
-              Received events, current state, attempt counts, processing history and error messages.
+              Received events, current state, attempt counts, processing history and error messages (All timestamps in Indian Standard Time).
             </p>
           </div>
         </div>

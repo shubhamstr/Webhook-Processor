@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma';
 import { CreateWebhookDto } from './dto';
+import { getISTDate } from '../common/time.utils';
 
 @Injectable()
 export class WebhooksService {
@@ -33,12 +34,15 @@ export class WebhooksService {
         payloadData.simulate = dto.simulate;
       }
 
+      const istNow = getISTDate();
       const created = await this.prisma.webhookEvent.create({
         data: {
           eventId: dto.eventId,
           eventType: dto.type,
           payload: payloadData as unknown as Prisma.InputJsonValue,
           status: 'pending',
+          receivedAt: istNow,
+          updatedAt: istNow,
         },
       });
 

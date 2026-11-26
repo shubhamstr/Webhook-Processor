@@ -16,13 +16,13 @@ model WebhookEvent {
   totalAttempts  Int       @default(0) @map("total_attempts")
   cycleAttempts  Int       @default(0) @map("cycle_attempts")
   maxAttempts    Int       @default(5) @map("max_attempts")
-  nextAttemptAt  DateTime? @map("next_attempt_at") @db.Timestamptz
+  nextAttemptAt  DateTime? @map("next_attempt_at") @db.Timestamp
   leaseOwner     String?   @map("lease_owner") @db.VarChar(255)
   leaseToken     String?   @map("lease_token") @db.Uuid
-  leaseExpiresAt DateTime? @map("lease_expires_at") @db.Timestamptz
+  leaseExpiresAt DateTime? @map("lease_expires_at") @db.Timestamp
   lastError      String?   @map("last_error") @db.Text
-  receivedAt     DateTime  @default(now()) @map("received_at") @db.Timestamptz
-  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  receivedAt     DateTime  @default(now()) @map("received_at") @db.Timestamp
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamp
 
   processingAttempts ProcessingAttempt[]
   processedOrder     ProcessedOrder?
@@ -38,8 +38,8 @@ model ProcessingAttempt {
   attemptNumber Int       @map("attempt_number")
   retryCycle    Int       @default(1) @map("retry_cycle")
   workerId      String    @map("worker_id") @db.VarChar(255)
-  startedAt     DateTime  @default(now()) @map("started_at") @db.Timestamptz
-  finishedAt    DateTime? @map("finished_at") @db.Timestamptz
+  startedAt     DateTime  @default(now()) @map("started_at") @db.Timestamp
+  finishedAt    DateTime? @map("finished_at") @db.Timestamp
   result        String?   @map("result") @db.VarChar(50)
   error         String?   @map("error") @db.Text
 
@@ -53,7 +53,7 @@ model ProcessingAttempt {
 model ProcessedOrder {
   orderId     String   @map("order_id") @db.VarChar(255)
   eventId     String   @id @map("event_id") @db.Uuid
-  processedAt DateTime @default(now()) @map("processed_at") @db.Timestamptz
+  processedAt DateTime @default(now()) @map("processed_at") @db.Timestamp
 
   webhookEvent WebhookEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
 

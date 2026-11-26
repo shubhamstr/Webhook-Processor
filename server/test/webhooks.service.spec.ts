@@ -68,12 +68,14 @@ describe('WebhooksService', () => {
         where: { eventId: sampleDto.eventId },
       });
       expect(prisma.webhookEvent.create).toHaveBeenCalledWith({
-        data: {
+        data: expect.objectContaining({
           eventId: sampleDto.eventId,
           eventType: sampleDto.type,
           payload: sampleDto.data,
           status: 'pending',
-        },
+          receivedAt: expect.any(Date),
+          updatedAt: expect.any(Date),
+        }),
       });
       expect(result).toEqual({
         status: 'accepted',

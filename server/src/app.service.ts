@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from './prisma';
+import { getISTISOString } from './common/time.utils';
 
 export interface HealthCheckResponse {
   status: 'ok' | 'error';
@@ -42,7 +43,7 @@ export class AppService {
 
     return {
       status: isHealthy ? 'ok' : 'error',
-      timestamp: new Date().toISOString(),
+      timestamp: getISTISOString(),
       uptime: process.uptime(),
       database: {
         status: dbStatus,

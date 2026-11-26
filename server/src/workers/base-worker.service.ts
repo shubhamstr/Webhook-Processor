@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma';
 import { ClaimedWebhookEvent, WorkerState } from './worker.types';
+import { getISTDate, getISTISOString } from '../common/time.utils';
 
 export abstract class BaseWorkerService {
   protected readonly logger: Logger;
@@ -135,9 +136,9 @@ export abstract class BaseWorkerService {
         FROM webhook_events
         WHERE (
           status = 'pending'
-          OR (status = 'processing' AND lease_expires_at < NOW())
+          OR (status = 'processing' AND lease_expires_at < (NOW() AT TIME ZONE 'Asia/Kolkata'))
         )
-        AND (next_attempt_at IS NULL OR next_attempt_at <= NOW())
+        AND (next_attempt_at IS NULL OR next_attempt_at <= (NOW() AT TIME ZONE 'Asia/Kolkata'))
         ORDER BY received_at ASC
         LIMIT 1
         FOR UPDATE SKIP LOCKED
@@ -147,8 +148,8 @@ export abstract class BaseWorkerService {
         status = 'processing',
         lease_owner = ${workerId},
         lease_token = ${leaseToken}::uuid,
-        lease_expires_at = NOW() + (${leaseDurationSeconds} || ' seconds')::interval,
-        updated_at = NOW()
+        lease_expires_at = (NOW() AT TIME ZONE 'Asia/Kolkata') + (${leaseDurationSeconds} || ' seconds')::interval,
+        updated_at = (NOW() AT TIME ZONE 'Asia/Kolkata')
       FROM candidate
       WHERE w.id = candidate.id
       RETURNING 
@@ -208,7 +209,7 @@ export abstract class BaseWorkerService {
         attemptNumber,
         retryCycle,
         workerId,
-        startedAt: new Date(),
+        startedAt: getISTDate(),
       },
     });
 
@@ -288,8 +289,8 @@ export abstract class BaseWorkerService {
             await this.prisma.webhookEvent.update({
               where: { id: event.id },
               data: {
-                leaseExpiresAt: new Date(
-                  Date.now() + (seconds + this.leaseDurationSeconds) * 1000,
+                leaseExpiresAt: getISTDate(
+                  new Date(Date.now() + (seconds + this.leaseDurationSeconds) * 1000),
                 ),
               },
             });
@@ -310,7 +311,7 @@ export abstract class BaseWorkerService {
           create: {
             eventId: event.id,
             orderId: orderIdStr,
-            processedAt: new Date(),
+            processedAt: getISTDate(),
           },
           update: {},
         });
@@ -321,7 +322,7 @@ export abstract class BaseWorkerService {
         where: { id: attempt.id },
         data: {
           result: 'success',
-          finishedAt: new Date(),
+          finishedAt: getISTDate(),
         },
       });
 
@@ -335,7 +336,7 @@ export abstract class BaseWorkerService {
           leaseToken: null,
           leaseExpiresAt: null,
           lastError: null,
-          updatedAt: new Date(),
+          updatedAt: getISTDate(),
         },
       });
 
@@ -356,7 +357,7 @@ export abstract class BaseWorkerService {
         data: {
           result: 'failure',
           error: errorMessage,
-          finishedAt: new Date(),
+          finishedAt: getISTDate(),
         },
       });
 
@@ -372,7 +373,7 @@ export abstract class BaseWorkerService {
             leaseToken: null,
             leaseExpiresAt: null,
             lastError: errorMessage,
-            updatedAt: new Date(),
+            updatedAt: getISTDate(),
           },
         });
         this.logger.error(
@@ -381,7 +382,9 @@ export abstract class BaseWorkerService {
       } else {
         // Schedule next attempt with exponential backoff: base 2s * 2^(retryCycle - 1)
         const backoffSeconds = Math.min(300, Math.pow(2, retryCycle - 1) * 2);
-        const nextAttemptAt = new Date(Date.now() + backoffSeconds * 1000);
+        const nextAttemptAt = getISTDate(
+          new Date(Date.now() + backoffSeconds * 1000),
+        );
 
         await this.prisma.webhookEvent.update({
           where: { id: event.id },
@@ -394,12 +397,12 @@ export abstract class BaseWorkerService {
             leaseToken: null,
             leaseExpiresAt: null,
             lastError: errorMessage,
-            updatedAt: new Date(),
+            updatedAt: getISTDate(),
           },
         });
 
         this.logger.log(
-          `[${workerId}] Event '${event.eventId}' rescheduled for retry at ${nextAttemptAt.toISOString()} (backoff: ${backoffSeconds}s)`,
+          `[${workerId}] Event '${event.eventId}' rescheduled for retry at ${getISTISOString(nextAttemptAt)} (backoff: ${backoffSeconds}s)`,
         );
       }
     }

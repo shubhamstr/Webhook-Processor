@@ -8,6 +8,12 @@ export class PrismaService
 {
   async onModuleInit() {
     await this.$connect();
+    try {
+      // Ensure PostgreSQL connection session uses Indian Standard Time (IST)
+      await this.$executeRawUnsafe("SET timezone = 'Asia/Calcutta';");
+    } catch {
+      // Ignore if database does not permit setting session timezone
+    }
   }
 
   async onModuleDestroy() {
