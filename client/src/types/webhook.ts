@@ -1,4 +1,9 @@
-export type WebhookStatus = 'processing' | 'completed' | 'permanently failed';
+export type WebhookStatus =
+  | 'pending'
+  | 'processing'
+  | 'completed'
+  | 'permanently failed'
+  | 'failed';
 
 export type WebhookEventType =
   | 'order.created'
@@ -7,21 +12,28 @@ export type WebhookEventType =
   | 'payment.succeeded'
   | 'payment.failed'
   | 'customer.created'
-  | 'inventory.low';
+  | 'inventory.low'
+  | string;
 
 export interface RetryAttempt {
   attemptNumber: number;
-  timestamp: string;
-  statusCode: number;
-  durationMs: number;
-  responseBody: string;
+  timestamp?: string;
+  startedAt?: string;
+  finishedAt?: string | null;
+  statusCode?: number;
+  durationMs?: number;
+  responseBody?: string;
   errorMessage?: string;
-  status: 'failed' | 'success';
+  error?: string | null;
+  status?: 'failed' | 'success' | string;
+  result?: string | null;
+  workerId?: string;
+  retryCycle?: number;
 }
 
 export interface WebhookPayload {
-  orderId: string;
-  customerId: string;
+  orderId?: string;
+  customerId?: string;
   amount?: number;
   currency?: string;
   itemsCount?: number;
@@ -29,23 +41,34 @@ export interface WebhookPayload {
   deliveryStatus?: string;
   notes?: string;
   metadata?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 export interface WebhookEvent {
   id: string;
-  type: WebhookEventType;
+  eventId?: string;
+  type?: WebhookEventType;
+  eventType?: string;
   status: WebhookStatus;
   payload: WebhookPayload;
-  endpointUrl: string;
-  retries: RetryAttempt[];
-  maxRetries: number;
-  createdAt: string;
-  updatedAt: string;
+  endpointUrl?: string;
+  retries?: RetryAttempt[];
+  processingAttempts?: RetryAttempt[];
+  totalAttempts?: number;
+  cycleAttempts?: number;
+  maxAttempts?: number;
+  maxRetries?: number;
+  nextAttemptAt?: string | null;
+  createdAt?: string;
+  receivedAt?: string;
+  updatedAt?: string;
   lastErrorMessage?: string;
+  lastError?: string | null;
 }
 
 export interface WebhookStats {
   total: number;
+  pending: number;
   processing: number;
   completed: number;
   permanentlyFailed: number;

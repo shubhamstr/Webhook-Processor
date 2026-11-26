@@ -1,312 +1,208 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { WebhookEvent, WebhookStatus, WebhookEventType, RetryAttempt } from '../types/webhook';
-import { INITIAL_WEBHOOK_EVENTS } from '../data/mockWebhooks';
+import React, { useState, useEffect, useCallback } from 'react';
+import { WebhookEvent, WebhookStatus, WebhookEventType } from '../types/webhook';
 import { WebhookTable } from '../components/WebhookTable';
-import { RetriesModal } from '../components/RetriesModal';
-import { PayloadModal } from '../components/PayloadModal';
-import { SimulateWebhookModal } from '../components/SimulateWebhookModal';
-import { Plus } from 'lucide-react';
+import { StatusCounts } from '../components/StatusCounts';
+import { Filter, Search, Loader2 } from 'lucide-react';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export default function WebhookProcessorDashboard() {
-  const [events, setEvents] = useState<WebhookEvent[]>(INITIAL_WEBHOOK_EVENTS);
+  const [events, setEvents] = useState<WebhookEvent[]>([]);
   const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
-  const [activeRetriesEvent, setActiveRetriesEvent] = useState<WebhookEvent | null>(null);
-  const [activePayloadEvent, setActivePayloadEvent] = useState<WebhookEvent | null>(null);
-  const [isSimulateOpen, setIsSimulateOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Sync activeRetriesEvent when event state updates
-  useEffect(() => {
-    if (activeRetriesEvent) {
-      const updated = events.find((e) => e.id === activeRetriesEvent.id);
-      if (updated) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setActiveRetriesEvent(updated);
+  // Fetch real events from the backend server
+  const fetchEvents = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/events?limit=100`);
+      if (!res.ok) {
+        throw new Error(`Server returned HTTP ${res.status}`);
       }
+      const json = await res.json();
+      const rawEvents = Array.isArray(json) ? json : json?.data || [];
+
+      const mapped: WebhookEvent[] = rawEvents.map((item: WebhookEvent) => ({
+        ...item,
+        id: item.id,
+        eventId: item.eventId || item.id,
+        type: (item.eventType || item.type || 'order.created') as WebhookEventType,
+        eventType: item.eventType || item.type,
+        status: item.status as WebhookStatus,
+        payload: item.payload || {},
+        totalAttempts: item.totalAttempts ?? item.processingAttempts?.length ?? 0,
+        maxAttempts: item.maxAttempts ?? 5,
+        lastErrorMessage: item.lastError || item.lastErrorMessage,
+        processingAttempts: item.processingAttempts || [],
+        retries: (item.processingAttempts || []).map((att) => ({
+          attemptNumber: att.attemptNumber,
+          timestamp: att.startedAt || att.timestamp,
+          startedAt: att.startedAt,
+          finishedAt: att.finishedAt,
+          durationMs: att.durationMs,
+          statusCode: att.result === 'success' ? 200 : 500,
+          errorMessage: att.error || att.errorMessage,
+          responseBody: att.result ? JSON.stringify({ result: att.result }) : undefined,
+          status: att.result === 'success' ? 'success' : 'failed',
+          workerId: att.workerId,
+        })),
+      }));
+
+      setEvents(mapped);
+      setFetchError(null);
+    } catch (err) {
+      setFetchError(err instanceof Error ? err.message : 'Failed to connect to backend server');
+    } finally {
+      setIsLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [events]);
+  }, []);
+
+  // Simple periodic polling to refresh the dashboard every 2.5 seconds
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchEvents();
+
+    const interval = setInterval(() => {
+      fetchEvents();
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [fetchEvents]);
 
   // Handle Retry Trigger
-  const handleRetry = (eventId: string) => {
+  const handleRetry = async (eventId: string) => {
     const targetEvent = events.find((e) => e.id === eventId);
     if (!targetEvent) return;
 
     setRetryingIds((prev) => new Set(prev).add(eventId));
 
-    // Update status to processing immediately
-    setEvents((prev) =>
-      prev.map((e) =>
-        e.id === eventId
-          ? {
-            ...e,
-            status: 'processing' as WebhookStatus,
-            updatedAt: new Date().toISOString(),
-          }
-          : e
-      )
-    );
+    try {
+      // Re-submit event payload to the webhooks endpoint to trigger processing
+      await fetch(`${API_BASE_URL}/webhooks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId: targetEvent.eventId || targetEvent.id,
+          type: targetEvent.eventType || targetEvent.type || 'order.created',
+          data: targetEvent.payload,
+        }),
+      });
 
-    // Simulate network delivery
-    setTimeout(() => {
-      setEvents((prev) =>
-        prev.map((e) => {
-          if (e.id !== eventId) return e;
-
-          const currentAttempts = e.retries.length;
-          const nextAttemptNumber = currentAttempts + 1;
-          const isMaxRetries = nextAttemptNumber >= e.maxRetries;
-          const willSucceed = Math.random() > 0.35 || !isMaxRetries;
-
-          if (willSucceed) {
-            const newRetry: RetryAttempt = {
-              attemptNumber: nextAttemptNumber,
-              timestamp: new Date().toISOString(),
-              statusCode: 200,
-              durationMs: Math.floor(Math.random() * 180 + 70),
-              responseBody: JSON.stringify({
-                status: 'delivered',
-                acknowledged: true,
-                orderId: e.payload.orderId,
-                customerId: e.payload.customerId,
-              }),
-              status: 'success',
-            };
-
-            return {
-              ...e,
-              status: 'completed' as WebhookStatus,
-              retries: [...e.retries, newRetry],
-              lastErrorMessage: undefined,
-              updatedAt: new Date().toISOString(),
-            };
-          } else {
-            const statusCode = [500, 502, 504][Math.floor(Math.random() * 3)];
-            const newRetry: RetryAttempt = {
-              attemptNumber: nextAttemptNumber,
-              timestamp: new Date().toISOString(),
-              statusCode,
-              durationMs: Math.floor(Math.random() * 450 + 200),
-              responseBody: JSON.stringify({
-                error: 'Service Unavailable',
-                attempt: nextAttemptNumber,
-              }),
-              errorMessage: `HTTP ${statusCode} Endpoint failed to respond`,
-              status: 'failed',
-            };
-
-            const newStatus: WebhookStatus = isMaxRetries ? 'permanently failed' : 'processing';
-
-            return {
-              ...e,
-              status: newStatus,
-              retries: [...e.retries, newRetry],
-              lastErrorMessage: `Attempt #${nextAttemptNumber} failed with HTTP ${statusCode}`,
-              updatedAt: new Date().toISOString(),
-            };
-          }
-        })
-      );
-
+      // Refetch updated events from backend
+      await fetchEvents();
+    } catch (err) {
+      console.error('Failed to trigger retry:', err);
+    } finally {
       setRetryingIds((prev) => {
         const next = new Set(prev);
         next.delete(eventId);
         return next;
       });
-    }, 1200);
-  };
-
-  // Handle Simulate Webhook
-  const handleSimulate = (config: {
-    type: WebhookEventType;
-    orderId: string;
-    customerId: string;
-    initialStatus: WebhookStatus;
-    simulateFailure: boolean;
-    amount?: number;
-    currency?: string;
-  }) => {
-    const randomHex = Math.random().toString(16).substring(2, 14);
-    const newEventId = `evt_${randomHex}`;
-
-    let initialRetries: RetryAttempt[] = [];
-    let status: WebhookStatus = config.initialStatus;
-
-    if (config.simulateFailure) {
-      status = 'permanently failed';
-      initialRetries = [
-        {
-          attemptNumber: 1,
-          timestamp: new Date(Date.now() - 1000 * 60 * 3).toISOString(),
-          statusCode: 504,
-          durationMs: 3000,
-          responseBody: '{"error": "Gateway Timeout"}',
-          errorMessage: 'Server timeout connecting to destination host',
-          status: 'failed',
-        },
-        {
-          attemptNumber: 2,
-          timestamp: new Date(Date.now() - 1000 * 60 * 2).toISOString(),
-          statusCode: 500,
-          durationMs: 420,
-          responseBody: '{"error": "Internal Server Error"}',
-          errorMessage: 'Internal downstream database deadlock',
-          status: 'failed',
-        },
-        {
-          attemptNumber: 3,
-          timestamp: new Date(Date.now() - 1000 * 30).toISOString(),
-          statusCode: 503,
-          durationMs: 220,
-          responseBody: '{"error": "Service Unavailable"}',
-          errorMessage: 'Retry budget exhausted (3/3). Marked as permanently failed.',
-          status: 'failed',
-        },
-      ];
-    } else if (config.initialStatus === 'completed') {
-      initialRetries = [
-        {
-          attemptNumber: 1,
-          timestamp: new Date().toISOString(),
-          statusCode: 200,
-          durationMs: 115,
-          responseBody: '{"success": true, "code": "OK"}',
-          status: 'success',
-        },
-      ];
-    }
-
-    const newEvent: WebhookEvent = {
-      id: newEventId,
-      type: config.type,
-      status,
-      endpointUrl: 'https://api.merchant.com/v1/webhooks/orders',
-      maxRetries: 3,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      lastErrorMessage: config.simulateFailure
-        ? 'Maximum retry limit (3/3) reached. Webhook permanently failed.'
-        : undefined,
-      payload: {
-        orderId: config.orderId,
-        customerId: config.customerId,
-        amount: config.amount || 149.99,
-        currency: config.currency || 'USD',
-        itemsCount: 2,
-        customerEmail: `user_${config.customerId.toLowerCase()}@example.com`,
-      },
-      retries: initialRetries,
-    };
-
-    setEvents((prev) => [newEvent, ...prev]);
-
-    // If initialStatus is processing and not simulated failure, auto-complete after 2.5s
-    if (config.initialStatus === 'processing' && !config.simulateFailure) {
-      setTimeout(() => {
-        setEvents((prev) =>
-          prev.map((e) =>
-            e.id === newEventId
-              ? {
-                ...e,
-                status: 'completed',
-                retries: [
-                  {
-                    attemptNumber: 1,
-                    timestamp: new Date().toISOString(),
-                    statusCode: 200,
-                    durationMs: 130,
-                    responseBody: '{"received": true, "processed": true}',
-                    status: 'success',
-                  },
-                ],
-              }
-              : e
-          )
-        );
-      }, 2500);
     }
   };
 
-  const processingCount = events.filter((e) => e.status === 'processing').length;
-  const completedCount = events.filter((e) => e.status === 'completed').length;
-  const failedCount = events.filter((e) => e.status === 'permanently failed').length;
+  // Filter events based on status and search query
+  const filteredEvents = events.filter((evt) => {
+    const normStatus = (evt.status || '').toLowerCase().replace(/_/g, ' ');
+    if (filterStatus === 'processing' && normStatus !== 'processing') return false;
+    if (filterStatus === 'completed' && normStatus !== 'completed') return false;
+    if (filterStatus === 'failed' && normStatus !== 'permanently failed' && normStatus !== 'failed') return false;
+    if (filterStatus === 'pending' && normStatus !== 'pending') return false;
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchId = (evt.id || '').toLowerCase().includes(q) || (evt.eventId || '').toLowerCase().includes(q);
+      const matchType = (evt.type || evt.eventType || '').toLowerCase().includes(q);
+      const matchOrder = (evt.payload?.orderId || '').toLowerCase().includes(q);
+      const matchCustomer = (evt.payload?.customerId || '').toLowerCase().includes(q);
+      const matchError = (evt.lastError || evt.lastErrorMessage || '').toLowerCase().includes(q);
+      return matchId || matchType || matchOrder || matchCustomer || matchError;
+    }
+
+    return true;
+  });
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 p-6 md:p-10">
-      <div className="max-w-6xl mx-auto space-y-6">
-        {/* Header */}
+    <div className="min-h-screen bg-gray-50 text-gray-900 p-4 md:p-8">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header without manual refresh button */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-200">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Webhook Events</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Webhook Processor</h1>
             <p className="text-sm text-gray-500 mt-1">
-              Monitor incoming webhook events, payload details, and retry history.
+              Received events, current state, attempt counts, processing history and error messages.
             </p>
           </div>
-
-          <div>
-            <button
-              onClick={() => setIsSimulateOpen(true)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Simulate Webhook</span>
-            </button>
-          </div>
         </div>
 
-        {/* Summary Badges */}
-        <div className="flex flex-wrap gap-4 text-xs">
-          <div className="px-3.5 py-2 bg-white border border-gray-200 rounded-lg shadow-xs">
-            <span className="text-gray-500">Total Events:</span>{' '}
-            <span className="font-bold text-gray-900 ml-1">{events.length}</span>
+        {/* Server connection error alert if any */}
+        {fetchError && (
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-xs flex items-center justify-between">
+            <span>
+              <strong>Note:</strong> Unable to reach API server at{' '}
+              <code className="font-mono bg-amber-100 px-1 py-0.5 rounded">{API_BASE_URL}</code> ({fetchError}).
+              Ensure the server is running on port 3001.
+            </span>
           </div>
-          <div className="px-3.5 py-2 bg-white border border-gray-200 rounded-lg shadow-xs">
-            <span className="text-amber-600 font-medium">Processing:</span>{' '}
-            <span className="font-bold text-gray-900 ml-1">{processingCount}</span>
-          </div>
-          <div className="px-3.5 py-2 bg-white border border-gray-200 rounded-lg shadow-xs">
-            <span className="text-emerald-600 font-medium">Completed:</span>{' '}
-            <span className="font-bold text-gray-900 ml-1">{completedCount}</span>
-          </div>
-          <div className="px-3.5 py-2 bg-white border border-gray-200 rounded-lg shadow-xs">
-            <span className="text-red-600 font-medium">Permanently Failed:</span>{' '}
-            <span className="font-bold text-gray-900 ml-1">{failedCount}</span>
-          </div>
-        </div>
+        )}
 
-        {/* Simple Webhook Table */}
-        <WebhookTable
+        {/* Status Metrics Badges */}
+        <StatusCounts
           events={events}
-          onRetry={handleRetry}
-          onOpenRetries={(evt) => setActiveRetriesEvent(evt)}
-          onOpenPayload={(evt) => setActivePayloadEvent(evt)}
-          retryingIds={retryingIds}
+          activeFilter={filterStatus}
+          onFilterChange={setFilterStatus}
         />
+
+        {/* Search and Filter Controls */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <div className="relative flex-1 max-w-md">
+            <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by Event ID, Order ID, Customer ID, error..."
+              className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 text-xs text-gray-500 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5">
+              <Filter className="w-3.5 h-3.5 text-gray-400" />
+              <span>Status:</span>
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="bg-transparent font-medium text-gray-800 focus:outline-hidden cursor-pointer"
+              >
+                <option value="all">All States</option>
+                <option value="pending">Pending</option>
+                <option value="processing">Processing</option>
+                <option value="completed">Completed</option>
+                <option value="failed">Permanently Failed</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Webhook Events Table with Click-to-Expand Row Details */}
+        {isLoading && events.length === 0 ? (
+          <div className="bg-white border border-gray-200 rounded-lg p-12 text-center text-gray-500 space-y-2">
+            <Loader2 className="w-6 h-6 animate-spin mx-auto text-blue-600" />
+            <p className="text-sm font-medium">Loading webhook events...</p>
+          </div>
+        ) : (
+          <WebhookTable
+            events={filteredEvents}
+            onRetry={handleRetry}
+            retryingIds={retryingIds}
+          />
+        )}
       </div>
-
-      {/* Retries Modal */}
-      <RetriesModal
-        event={activeRetriesEvent}
-        isOpen={!!activeRetriesEvent}
-        onClose={() => setActiveRetriesEvent(null)}
-        onRetry={(id) => handleRetry(id)}
-        isRetrying={activeRetriesEvent ? retryingIds.has(activeRetriesEvent.id) : false}
-      />
-
-      {/* Payload Modal */}
-      <PayloadModal
-        event={activePayloadEvent}
-        isOpen={!!activePayloadEvent}
-        onClose={() => setActivePayloadEvent(null)}
-      />
-
-      {/* Simulate Modal */}
-      <SimulateWebhookModal
-        isOpen={isSimulateOpen}
-        onClose={() => setIsSimulateOpen(false)}
-        onSimulate={handleSimulate}
-      />
     </div>
   );
 }
