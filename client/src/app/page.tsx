@@ -21,7 +21,7 @@ export default function WebhookProcessorDashboard() {
   // Fetch real events from the backend server via GET /events
   const fetchEvents = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/events?limit=100`);
+      const res = await fetch(`${API_BASE_URL}/events?limit=500`);
       if (!res.ok) {
         throw new Error(`Server returned HTTP ${res.status}`);
       }

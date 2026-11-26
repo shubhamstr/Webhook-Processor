@@ -1,11 +1,14 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { WebhookEvent, RetryAttempt } from '../types/webhook';
 import { StatusBadge } from './StatusBadge';
 import {
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
+  ChevronsLeft,
+  ChevronsRight,
   RotateCw,
   AlertCircle,
   Clock,
@@ -23,6 +26,8 @@ interface WebhookTableProps {
   onToggleRow?: (event: WebhookEvent) => void;
   onRefreshDetail?: (event: WebhookEvent) => void;
   onRowClick?: (event: WebhookEvent) => void;
+  defaultPageSize?: number;
+  pageSizeOptions?: number[];
 }
 
 export const WebhookTable: React.FC<WebhookTableProps> = ({
@@ -32,10 +37,73 @@ export const WebhookTable: React.FC<WebhookTableProps> = ({
   expandedId: controlledExpandedId,
   onToggleRow,
   onRowClick,
+  defaultPageSize = 100,
+  pageSizeOptions = [10, 25, 50, 100, 200, 500],
 }) => {
   const [internalExpandedId, setInternalExpandedId] = useState<string | null>(null);
   const expandedId =
     controlledExpandedId !== undefined ? controlledExpandedId : internalExpandedId;
+
+  // Table pagination state with default limit of 100
+  const [pageSize, setPageSize] = useState<number>(defaultPageSize);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+
+  const totalPages = Math.max(1, Math.ceil(events.length / pageSize));
+
+  // Auto-clamp current page if total pages change (e.g. on filter, search, or page size change)
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(Math.max(1, totalPages));
+    }
+  }, [totalPages, currentPage]);
+
+  const handlePageChange = (newPage: number) => {
+    const validPage = Math.max(1, Math.min(newPage, totalPages));
+    setCurrentPage(validPage);
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    const newTotalPages = Math.max(1, Math.ceil(events.length / newSize));
+    if (currentPage > newTotalPages) {
+      setCurrentPage(newTotalPages);
+    }
+  };
+
+  const startIndex = events.length === 0 ? 0 : (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, events.length);
+  const paginatedEvents = events.slice(startIndex, endIndex);
+  const displayStart = events.length === 0 ? 0 : startIndex + 1;
+
+  // Generate numbered pages with smart ellipsis for navigation
+  const getPageNumbers = (): (number | string)[] => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+
+    const pages: (number | string)[] = [];
+    pages.push(1);
+
+    if (currentPage > 3) {
+      pages.push('...');
+    }
+
+    const start = Math.max(2, currentPage - 1);
+    const end = Math.min(totalPages - 1, currentPage + 1);
+
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+
+    if (currentPage < totalPages - 2) {
+      pages.push('...');
+    }
+
+    pages.push(totalPages);
+    return pages;
+  };
+
+  const pageNumbers = getPageNumbers();
 
   const handleRowClick = (evt: WebhookEvent) => {
     if (onToggleRow) {
@@ -94,17 +162,157 @@ export const WebhookTable: React.FC<WebhookTableProps> = ({
     return evt.lastError || evt.lastErrorMessage || undefined;
   };
 
+  const renderPaginationBar = (position: 'top' | 'bottom') => {
+    const isTop = position === 'top';
+
+    return (
+      <div
+        className={`py-2 px-4 bg-gray-50/90 flex flex-wrap items-center justify-between gap-3 text-xs select-none ${
+          isTop ? 'border-b border-gray-200' : 'border-t border-gray-200'
+        }`}
+      >
+        {/* Left: Summary & status info */}
+        <div className="flex items-center gap-2 text-gray-600">
+          {events.length === 0 ? (
+            <span className="font-medium text-gray-500">No events to display</span>
+          ) : (
+            <span className="font-medium text-gray-700">
+              Showing <span className="font-semibold text-gray-900">{displayStart}</span>–<span className="font-semibold text-gray-900">{endIndex}</span> of{' '}
+              <span className="font-semibold text-gray-900">{events.length}</span> {events.length === 1 ? 'event' : 'events'}
+            </span>
+          )}
+          {isTop && (
+            <span className="text-gray-400 text-[11px] hidden lg:inline">
+              (Click any row to expand details, payload & processing history)
+            </span>
+          )}
+          {!isTop && (
+            <span className="text-gray-400 text-[11px] hidden sm:inline">
+              • Expanded: {expandedId ? 1 : 0} of {paginatedEvents.length} on this page
+            </span>
+          )}
+        </div>
+
+        {/* Right: Page size selector and Pagination navigation buttons */}
+        <div className="flex flex-wrap items-center gap-3 ml-auto">
+          {/* Page size dropdown */}
+          <div className="flex items-center gap-1.5 text-gray-600">
+            <label htmlFor={`page-size-${position}`} className="text-gray-500 whitespace-nowrap text-xs">
+              Rows per page:
+            </label>
+            <select
+              id={`page-size-${position}`}
+              value={pageSize}
+              onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+              className="bg-white border border-gray-300 text-gray-800 text-xs rounded px-2 py-1 focus:outline-hidden focus:ring-1 focus:ring-blue-500 cursor-pointer font-medium shadow-2xs"
+              aria-label="Select rows per page"
+            >
+              {pageSizeOptions.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Divider */}
+          <div className="h-4 w-px bg-gray-300 hidden sm:block" />
+
+          {/* Pagination Navigation Buttons */}
+          <div className="flex items-center gap-1">
+            {/* First Page */}
+            <button
+              type="button"
+              onClick={() => handlePageChange(1)}
+              disabled={currentPage <= 1}
+              title="First page"
+              aria-label="First page"
+              className="p-1.5 rounded text-gray-600 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+            >
+              <ChevronsLeft className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Previous Page */}
+            <button
+              type="button"
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage <= 1}
+              title="Previous page"
+              aria-label="Previous page"
+              className="p-1.5 rounded text-gray-600 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Mobile Page Indicator */}
+            <span className="sm:hidden text-xs font-medium text-gray-700 px-1 whitespace-nowrap">
+              Page {currentPage} of {totalPages}
+            </span>
+
+            {/* Desktop Numbered Page Buttons */}
+            <div className="hidden sm:flex items-center gap-0.5">
+              {pageNumbers.map((p, idx) => {
+                if (p === '...') {
+                  return (
+                    <span key={`ellipsis-${position}-${idx}`} className="px-1 text-gray-400 select-none">
+                      ...
+                    </span>
+                  );
+                }
+                const pageNum = Number(p);
+                const isActive = pageNum === currentPage;
+                return (
+                  <button
+                    key={`page-${position}-${pageNum}`}
+                    type="button"
+                    onClick={() => handlePageChange(pageNum)}
+                    className={`min-w-[26px] h-6 px-1.5 text-xs rounded transition-colors ${
+                      isActive
+                        ? 'bg-blue-600 text-white font-semibold shadow-2xs'
+                        : 'text-gray-700 hover:bg-gray-200 font-medium'
+                    }`}
+                    aria-current={isActive ? 'page' : undefined}
+                    title={`Page ${pageNum}`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Next Page */}
+            <button
+              type="button"
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage >= totalPages}
+              title="Next page"
+              aria-label="Next page"
+              className="p-1.5 rounded text-gray-600 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Last Page */}
+            <button
+              type="button"
+              onClick={() => handlePageChange(totalPages)}
+              disabled={currentPage >= totalPages}
+              title="Last page"
+              aria-label="Last page"
+              className="p-1.5 rounded text-gray-600 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+            >
+              <ChevronsRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="bg-white border border-gray-200 rounded-lg shadow-xs overflow-hidden">
-      {/* Table Toolbar */}
-      <div className="py-2.5 px-4 bg-gray-50/80 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2 text-xs">
-        <span className="text-gray-600 font-medium">
-          Showing {events.length} received {events.length === 1 ? 'event' : 'events'}
-        </span>
-        <span className="text-gray-400 text-[11px] hidden sm:inline">
-          Click any row to expand details, payload & processing history
-        </span>
-      </div>
+      {/* Table Top: Pagination & Page Size */}
+      {renderPaginationBar('top')}
 
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse text-sm">
@@ -122,14 +330,14 @@ export const WebhookTable: React.FC<WebhookTableProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 text-gray-700">
-            {events.length === 0 ? (
+            {paginatedEvents.length === 0 ? (
               <tr>
                 <td colSpan={9} className="py-12 text-center text-gray-400 text-sm">
-                  No webhook events recorded yet.
+                  {events.length === 0 ? 'No webhook events recorded yet.' : 'No webhook events found on this page.'}
                 </td>
               </tr>
             ) : (
-              events.map((evt) => {
+              paginatedEvents.map((evt) => {
                 const isExpanded = expandedId === evt.id;
                 const isRetrying = retryingIds.has(evt.id) || evt.status === 'processing';
                 const attemptCount = getAttemptCount(evt);
@@ -498,11 +706,8 @@ export const WebhookTable: React.FC<WebhookTableProps> = ({
         </table>
       </div>
 
-      {/* Table Footer */}
-      <div className="py-2.5 px-4 bg-gray-50 border-t border-gray-200 text-xs text-gray-500 flex flex-wrap justify-between items-center gap-2">
-        <span>Total: {events.length} events recorded</span>
-        <span>Expanded: {expandedId ? 1 : 0} of {events.length} rows</span>
-      </div>
+      {/* Table Bottom: Pagination & Page Size */}
+      {renderPaginationBar('bottom')}
     </div>
   );
 };
