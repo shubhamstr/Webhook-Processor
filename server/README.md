@@ -56,6 +56,12 @@ server/
 │   │   ├── events.module.ts         # Events feature module
 │   │   ├── events.controller.spec.ts # Controller unit tests
 │   │   └── events.service.spec.ts   # Service unit tests
+│   ├── workers/
+│   │   ├── workers.service.ts       # 2 PostgreSQL workers, claiming with SKIP LOCKED & while(true)
+│   │   ├── workers.controller.ts    # GET /workers/status, POST /workers/start, stop, claim
+│   │   ├── workers.module.ts        # Workers feature module
+│   │   ├── worker-runner.ts         # Standalone worker script (npm run worker)
+│   │   └── index.ts
 │   ├── app.controller.ts            # Root health check controller
 │   ├── app.service.ts               # Root service
 │   ├── app.module.ts                # Root application module
@@ -436,5 +442,43 @@ Invoke-RestMethod -Uri "http://localhost:3001/health" -Method Get
   }
 }
 ```
+
+---
+
+## PostgreSQL-Backed Workers
+
+Two concurrent background workers poll and process webhook events from PostgreSQL with distributed locking and crashed-worker recovery.
+
+### Key Architecture Features
+
+1. **Continuous `while (true)` loop**: Each worker runs an independent polling loop.
+2. **Unique Worker Identifiers**: Default `worker-1` and `worker-2` (configurable via `WORKER_1_ID` and `WORKER_2_ID`).
+3. **Atomic Claiming with Row Locking (`SKIP LOCKED`)**:
+   - Uses PostgreSQL `FOR UPDATE SKIP LOCKED` so concurrent workers never lock or process the same event simultaneously.
+   - Claims pending events where `next_attempt_at IS NULL OR next_attempt_at <= NOW()`.
+4. **Lease Expiration & Worker Crash Recovery**:
+   - When claimed, status changes to `processing`, `lease_owner` is assigned to the worker, `lease_token` is generated, and `lease_expires_at` is set (`NOW() + lease_duration`).
+   - If a worker crashes or abandons an event, other workers automatically reclaim the event once `lease_expires_at < NOW()`.
+5. **Exponential Backoff & Retries**:
+   - Failed events are retried with exponential backoff delay up to `max_attempts`.
+   - Each attempt is recorded in the `processing_attempts` table.
+
+### Worker API Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/workers/status` | View status and stats of both workers |
+| `POST` | `/workers/start` | Start worker execution loops |
+| `POST` | `/workers/stop` | Gracefully stop worker loops |
+| `POST` | `/workers/claim` | Manually trigger a claim for a given worker |
+
+### Running Workers Standalone
+
+Workers can also run in a dedicated process outside the HTTP web server:
+
+```bash
+npm run worker
+```
+
 
 

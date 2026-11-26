@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { EventsModule } from './events/events.module';
+import { WorkersModule } from './workers/workers.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { EventsModule } from './events/events.module';
     PrismaModule,
     WebhooksModule,
     EventsModule,
+    WorkersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

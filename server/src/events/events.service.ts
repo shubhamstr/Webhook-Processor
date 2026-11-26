@@ -107,8 +107,7 @@ export class EventsService {
 
     const sortBy = query.sortBy || 'receivedAt';
     const sortOrder = (query.sortOrder || 'desc').toLowerCase() as
-      | 'asc'
-      | 'desc';
+      'asc' | 'desc';
 
     const [total, events] = await Promise.all([
       this.prisma.webhookEvent.count({ where }),

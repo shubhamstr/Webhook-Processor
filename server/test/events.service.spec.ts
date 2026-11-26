@@ -240,9 +240,9 @@ describe('EventsService', () => {
       mockPrismaService.webhookEvent.count
         .mockResolvedValueOnce(50) // total
         .mockResolvedValueOnce(15) // pending
-        .mockResolvedValueOnce(5)  // processing
+        .mockResolvedValueOnce(5) // processing
         .mockResolvedValueOnce(25) // completed
-        .mockResolvedValueOnce(5);  // failed
+        .mockResolvedValueOnce(5); // failed
 
       const result = await service.getStats();
 

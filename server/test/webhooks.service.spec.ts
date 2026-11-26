@@ -89,7 +89,9 @@ describe('WebhooksService', () => {
         payload: sampleDto.data,
         status: 'pending',
       };
-      mockPrismaService.webhookEvent.findUnique.mockResolvedValue(existingRecord);
+      mockPrismaService.webhookEvent.findUnique.mockResolvedValue(
+        existingRecord,
+      );
 
       const result = await service.ingestWebhook(sampleDto);
 
@@ -117,7 +119,9 @@ describe('WebhooksService', () => {
         payload: originalPayload,
         status: 'pending',
       };
-      mockPrismaService.webhookEvent.findUnique.mockResolvedValue(existingRecord);
+      mockPrismaService.webhookEvent.findUnique.mockResolvedValue(
+        existingRecord,
+      );
 
       const differentDto: CreateWebhookDto = {
         eventId: 'evt_123',

@@ -34,7 +34,8 @@ export class AppService {
     } catch (error) {
       this.logger.error('Database health check failed', error);
       dbStatus = 'down';
-      dbError = error instanceof Error ? error.message : 'Unknown database error';
+      dbError =
+        error instanceof Error ? error.message : 'Unknown database error';
     }
 
     const isHealthy = dbStatus === 'up';

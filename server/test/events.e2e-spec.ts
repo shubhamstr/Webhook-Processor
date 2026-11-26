@@ -140,13 +140,9 @@ describe('EventsController (e2e)', () => {
     });
 
     it('should reject invalid query parameters', async () => {
-      await request(app.getHttpServer())
-        .get('/events?limit=9999')
-        .expect(400);
+      await request(app.getHttpServer()).get('/events?limit=9999').expect(400);
 
-      await request(app.getHttpServer())
-        .get('/events?page=0')
-        .expect(400);
+      await request(app.getHttpServer()).get('/events?page=0').expect(400);
     });
   });
 
