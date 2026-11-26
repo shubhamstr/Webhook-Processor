@@ -63,6 +63,7 @@ export const WebhookTable: React.FC<WebhookTableProps> = ({
       // components consistently across any client browser locale or SSR.
       const formatted = d.toLocaleString('en-IN', {
         timeZone: 'UTC',
+        year: 'numeric',
         month: 'short',
         day: 'numeric',
         hour: '2-digit',
