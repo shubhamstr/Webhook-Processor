@@ -72,4 +72,6 @@ export interface WebhookStats {
   processing: number;
   completed: number;
   permanentlyFailed: number;
+  failed?: number;
+  completelyFailed?: number;
 }

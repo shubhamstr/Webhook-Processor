@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { WebhookEvent, WebhookStatus, WebhookEventType } from '../types/webhook';
+import { WebhookEvent, WebhookStatus, WebhookEventType, WebhookStats } from '../types/webhook';
 import { WebhookTable } from '../components/WebhookTable';
 import { StatusCounts } from '../components/StatusCounts';
 import { Filter, Search, Loader2 } from 'lucide-react';
@@ -10,6 +10,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export default function WebhookProcessorDashboard() {
   const [events, setEvents] = useState<WebhookEvent[]>([]);
+  const [stats, setStats] = useState<WebhookStats | null>(null);
   const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -61,17 +62,40 @@ export default function WebhookProcessorDashboard() {
     }
   }, []);
 
-  // Simple periodic polling to refresh the dashboard every 2.5 seconds
+  // Fetch dashboard statistics from the backend server
+  const fetchStats = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/stats`);
+      if (!res.ok) {
+        throw new Error(`Server returned HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      setStats({
+        total: data.total ?? data.totalEvents ?? 0,
+        pending: data.pending ?? data.pendingEvents ?? 0,
+        processing: data.processing ?? data.processingEvents ?? 0,
+        completed: data.completed ?? data.completedEvents ?? 0,
+        permanentlyFailed:
+          data.permanentlyFailed ?? data.failed ?? data.completelyFailed ?? 0,
+      });
+    } catch (err) {
+      console.error('Failed to fetch stats:', err);
+    }
+  }, []);
+
+  // Simple periodic polling to refresh events and statistics every 2.5 seconds
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchEvents();
+    fetchStats();
 
     const interval = setInterval(() => {
       fetchEvents();
+      fetchStats();
     }, 2500);
 
     return () => clearInterval(interval);
-  }, [fetchEvents]);
+  }, [fetchEvents, fetchStats]);
 
   // Handle Retry Trigger
   const handleRetry = async (eventId: string) => {
@@ -92,8 +116,8 @@ export default function WebhookProcessorDashboard() {
         }),
       });
 
-      // Refetch updated events from backend
-      await fetchEvents();
+      // Refetch updated events and stats from backend
+      await Promise.all([fetchEvents(), fetchStats()]);
     } catch (err) {
       console.error('Failed to trigger retry:', err);
     } finally {
@@ -153,6 +177,7 @@ export default function WebhookProcessorDashboard() {
         {/* Status Metrics Badges */}
         <StatusCounts
           events={events}
+          stats={stats}
           activeFilter={filterStatus}
           onFilterChange={setFilterStatus}
         />

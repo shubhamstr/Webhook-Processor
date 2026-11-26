@@ -1,32 +1,42 @@
 'use client';
 
 import React from 'react';
-import { WebhookEvent } from '../types/webhook';
+import { WebhookEvent, WebhookStats } from '../types/webhook';
 
 interface StatusCountsProps {
-  events: WebhookEvent[];
+  events?: WebhookEvent[];
+  stats?: WebhookStats | null;
   activeFilter?: string;
   onFilterChange?: (status: string) => void;
 }
 
 export const StatusCounts: React.FC<StatusCountsProps> = ({
-  events,
+  events = [],
+  stats,
   activeFilter = 'all',
   onFilterChange,
 }) => {
-  const total = events.length;
-  const pending = events.filter(
-    (e) => (e.status || '').toLowerCase() === 'pending'
-  ).length;
-  const processing = events.filter(
-    (e) => (e.status || '').toLowerCase() === 'processing'
-  ).length;
-  const completed = events.filter(
-    (e) => (e.status || '').toLowerCase() === 'completed'
-  ).length;
-  const permanentlyFailed = events.filter(
-    (e) => (e.status || '').toLowerCase().includes('fail')
-  ).length;
+  const total = stats ? stats.total : events.length;
+  const pending = stats
+    ? stats.pending
+    : events.filter(
+        (e) => (e.status || '').toLowerCase() === 'pending'
+      ).length;
+  const processing = stats
+    ? stats.processing
+    : events.filter(
+        (e) => (e.status || '').toLowerCase() === 'processing'
+      ).length;
+  const completed = stats
+    ? stats.completed
+    : events.filter(
+        (e) => (e.status || '').toLowerCase() === 'completed'
+      ).length;
+  const permanentlyFailed = stats
+    ? (stats.permanentlyFailed ?? stats.failed ?? stats.completelyFailed ?? 0)
+    : events.filter(
+        (e) => (e.status || '').toLowerCase().includes('fail')
+      ).length;
 
   const handleClick = (status: string) => {
     if (!onFilterChange) return;
