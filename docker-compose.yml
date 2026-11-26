@@ -1,0 +1,147 @@
+# ==============================================================================
+# Webhook Processor - Multi-Container Docker Compose
+# Services:
+#   1. postgres  : PostgreSQL 16 database with init.sql schema
+#   2. server    : NestJS API server (Port 3001)
+#   3. worker-1  : Standalone background queue worker 1
+#   4. worker-2  : Standalone background queue worker 2
+#   5. client    : Next.js frontend dashboard (Port 3000)
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # PostgreSQL Database Service
+  # ----------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: webhook-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-webhook-processor}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./server/prisma/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-webhook-processor}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    networks:
+      - webhook-network
+
+  # ----------------------------------------------------------------------------
+  # Backend NestJS API Server
+  # ----------------------------------------------------------------------------
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    image: webhook-processor-server:latest
+    container_name: webhook-server
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-webhook-processor}?schema=public
+      PORT: 3001
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: sh -c "npx prisma db push --skip-generate --accept-data-loss && node dist/main.js"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3001/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - webhook-network
+
+  # ----------------------------------------------------------------------------
+  # Background Worker 1
+  # ----------------------------------------------------------------------------
+  worker-1:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    image: webhook-processor-server:latest
+    container_name: webhook-worker-1
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-webhook-processor}?schema=public
+      WORKER_1_ID: worker-1
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      server:
+        condition: service_healthy
+    command: node dist/workers/worker-1-runner.js
+    networks:
+      - webhook-network
+
+  # ----------------------------------------------------------------------------
+  # Background Worker 2
+  # ----------------------------------------------------------------------------
+  worker-2:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    image: webhook-processor-server:latest
+    container_name: webhook-worker-2
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-webhook-processor}?schema=public
+      WORKER_2_ID: worker-2
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      server:
+        condition: service_healthy
+    command: node dist/workers/worker-2-runner.js
+    networks:
+      - webhook-network
+
+  # ----------------------------------------------------------------------------
+  # Next.js Frontend Dashboard
+  # ----------------------------------------------------------------------------
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+    image: webhook-processor-client:latest
+    container_name: webhook-client
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      HOSTNAME: "0.0.0.0"
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+      NODE_ENV: production
+    depends_on:
+      server:
+        condition: service_healthy
+    networks:
+      - webhook-network
+
+# ------------------------------------------------------------------------------
+# Persistent Volumes & Networks
+# ------------------------------------------------------------------------------
+volumes:
+  postgres_data:
+    name: webhook_postgres_data
+
+networks:
+  webhook-network:
+    name: webhook-processor-network
+    driver: bridge

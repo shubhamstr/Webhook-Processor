@@ -1,0 +1,27 @@
+{
+  "name": "webhook-processor",
+  "version": "1.0.0",
+  "description": "High-performance idempotent Webhook Processor with NestJS backend, Next.js frontend, PostgreSQL, and concurrent background workers.",
+  "private": true,
+  "scripts": {
+    "docker:up": "docker compose up --build",
+    "docker:up:d": "docker compose up --build -d",
+    "docker:down": "docker compose down",
+    "docker:down:v": "docker compose down -v",
+    "docker:logs": "docker compose logs -f",
+    "docker:ps": "docker compose ps",
+    "docker:restart": "docker compose restart",
+    "docker:rebuild": "docker compose build --no-cache"
+  },
+  "keywords": [
+    "webhook",
+    "nestjs",
+    "nextjs",
+    "postgres",
+    "prisma",
+    "docker",
+    "docker-compose"
+  ],
+  "author": "",
+  "license": "UNLICENSED"
+}

@@ -1,3 +1,35 @@
+# Dependencies
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Next.js & Build outputs
+client/.next/
+client/out/
+client/build/
+server/dist/
+server/logs/
+*.log
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+!.env.example
+client/.env*.local
+server/.env
+server/.env*.local
+!server/.env.example
+
+# IDE & OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.tsbuildinfo
+
+# AI agents
 server/.agents
 server/.claude
 server/.windsurf
+.agents
