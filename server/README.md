@@ -57,10 +57,13 @@ server/
 │   │   ├── events.controller.spec.ts # Controller unit tests
 │   │   └── events.service.spec.ts   # Service unit tests
 │   ├── workers/
-│   │   ├── workers.service.ts       # 2 PostgreSQL workers, claiming with SKIP LOCKED & while(true)
-│   │   ├── workers.controller.ts    # GET /workers/status, POST /workers/start, stop, claim
+│   │   ├── base-worker.service.ts   # Base worker processing & retry logic
+│   │   ├── worker-1.service.ts      # Dedicated Worker 1 service
+│   │   ├── worker-2.service.ts      # Dedicated Worker 2 service
+│   │   ├── worker-1-runner.ts       # Standalone Worker 1 runner (npm run worker:1)
+│   │   ├── worker-2-runner.ts       # Standalone Worker 2 runner (npm run worker:2)
+│   │   ├── workers.service.ts       # Worker management service
 │   │   ├── workers.module.ts        # Workers feature module
-│   │   ├── worker-runner.ts         # Standalone worker script (npm run worker)
 │   │   └── index.ts
 │   ├── app.controller.ts            # Root health check controller
 │   ├── app.service.ts               # Root service
@@ -301,6 +304,8 @@ Two concurrent background workers poll and process webhook events from PostgreSQ
 
 ### Running Workers Separately with CMD
 
+> **Note:** Workers do **not** auto-start when running the main API server (`npm run start:dev` or `npm run start`). The main server runs in pure API mode, allowing you to run workers manually.
+
 Worker 1 and Worker 2 code have been separated into dedicated services (`worker-1.service.ts` and `worker-2.service.ts`) and standalone entry runners (`worker-1-runner.ts` and `worker-2-runner.ts`).
 
 You can start each worker independently in its own CMD / terminal window:
@@ -340,13 +345,6 @@ npm run worker:1:prod
 
 # Terminal 2:
 npm run worker:2:prod
-```
-
-#### Option 4: Run Both Workers Concurrently in a Single Process
-
-```bash
-npm run worker
-# or: npm run worker:all
 ```
 
 

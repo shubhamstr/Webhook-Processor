@@ -1,5 +1,4 @@
 process.env.STANDALONE_WORKER = 'worker-2';
-process.env.WORKERS_AUTO_START = 'false';
 
 import { NestFactory } from '@nestjs/core';
 import { Logger } from 'nestjs-pino';

@@ -1,7 +1,6 @@
 import {
   Injectable,
   Logger,
-  OnApplicationBootstrap,
   OnApplicationShutdown,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -14,14 +13,11 @@ import {
 } from './worker.types';
 
 @Injectable()
-export class WorkersService
-  implements OnApplicationBootstrap, OnApplicationShutdown
-{
+export class WorkersService implements OnApplicationShutdown {
   private readonly logger = new Logger(WorkersService.name);
 
   readonly worker1Id: string;
   readonly worker2Id: string;
-  private readonly autoStart: boolean;
   private isRunning = false;
   private isStopped = false;
 
@@ -32,18 +28,6 @@ export class WorkersService
   ) {
     this.worker1Id = this.worker1.workerId;
     this.worker2Id = this.worker2.workerId;
-
-    this.autoStart =
-      this.configService.get<string>('NODE_ENV') !== 'test' &&
-      this.configService.get<string>('WORKERS_ENABLED') !== 'false' &&
-      process.env.STANDALONE_WORKER === undefined &&
-      process.env.WORKERS_AUTO_START !== 'false';
-  }
-
-  onApplicationBootstrap() {
-    if (this.autoStart) {
-      this.startWorkers();
-    }
   }
 
   onApplicationShutdown() {
