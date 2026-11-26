@@ -1,132 +1,282 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Webhook Processor - Server
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A high-performance, idempotent webhook ingestion and processing service built with NestJS, Prisma, and PostgreSQL.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+---
 
-## Description
+## Tech Stack
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+- **Runtime & Language:** Node.js (v20+ / v22+), TypeScript
+- **Framework:** NestJS 12
+- **Database & ORM:** PostgreSQL, Prisma ORM 6
+- **Validation & Serialization:** `class-validator`, `class-transformer`
+- **Logging & Observability:** Pino (`nestjs-pino`, `pino-pretty`)
+- **Testing:** Jest, ts-jest, Supertest
+- **Linting & Formatting:** Oxlint, Prettier
 
-## Project setup
+---
 
-```bash
-$ npm install
+## Tools
+
+- **Prisma CLI & Prisma Studio:** Database migrations, introspection, and visual data management
+- **PostgreSQL:** Relational database with JSONB support
+- **Oxlint:** Fast Rust-based linter for TypeScript
+- **cURL / PowerShell:** API manual testing and simulation
+
+---
+
+## Server Code Structure
+
+```text
+server/
+├── prisma/
+│   ├── init.sql                     # Database initialization and raw schema
+│   └── schema.prisma                # Prisma schema models (WebhookEvent, ProcessingAttempt, ProcessedOrder)
+├── src/
+│   ├── prisma/
+│   │   ├── prisma.module.ts         # Prisma global module
+│   │   ├── prisma.service.ts        # Prisma client lifecycle management ($connect / $disconnect)
+│   │   └── index.ts
+│   ├── webhooks/
+│   │   ├── dto/
+│   │   │   ├── create-webhook.dto.ts # Top-level webhook schema validation (eventId, type, data)
+│   │   │   ├── webhook-data.dto.ts   # Inner event data schema validation (orderId, customerId, simulate, etc.)
+│   │   │   └── index.ts
+│   │   ├── webhooks.controller.ts   # POST /webhooks endpoint handler (returns 202 Accepted)
+│   │   ├── webhooks.service.ts      # Webhook persistence, deduplication & idempotency logic
+│   │   ├── webhooks.module.ts       # Webhooks feature module
+│   │   ├── webhooks.controller.spec.ts # Controller unit tests
+│   │   └── webhooks.service.spec.ts    # Service unit tests
+│   ├── app.controller.ts            # Root health check controller
+│   ├── app.service.ts               # Root service
+│   ├── app.module.ts                # Root application module
+│   └── main.ts                      # App bootstrap, Pino logger, and global ValidationPipe
+├── test/
+│   ├── app.e2e-spec.ts              # Root e2e tests
+│   ├── webhooks.e2e-spec.ts         # Webhook ingestion e2e tests (202, deduplication, 400 validation)
+│   └── jest-e2e.json                # E2E Jest configuration
+├── .env.example                     # Environment variables template
+├── .env                             # Local environment variables
+├── package.json                     # Scripts and dependencies
+└── tsconfig.json                    # TypeScript compiler options
 ```
 
-## Compile and run the project
+---
 
-```bash
-# development
-$ npm run start
+## How to Start Guide
 
-# watch mode
-$ npm run start:dev
+### 1. Prerequisites
+- Node.js (v20+ or v22+)
+- PostgreSQL instance running
 
-# production mode
-$ npm run start:prod
+### 2. Environment Setup
+Create a `.env` file in the `server` directory (or configure based on `.env.example`):
+
+```env
+DATABASE_URL="postgresql://postgres:1234@localhost:5432/webhook-processor?schema=public"
+PORT=3001
 ```
 
-## Run tests
-
+### 3. Install Dependencies
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm install
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
+### 4. Setup Database
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+# Generate Prisma Client
+npm run prisma:generate
+
+# Apply schema migrations
+npm run prisma:migrate
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### 5. Run the Application
+```bash
+# Development mode (watch)
+npm run start:dev
 
-## Observability
+# Production mode
+npm run build
+npm run start:prod
+```
+The server will start on `http://localhost:3001`.
 
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
+---
 
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
-
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
-
-To add it to this project, run this and approve the code it prints at [observe.nestjs.com/link](https://observe.nestjs.com/link) - signing up for free if you have no account:
+## Testing Commands
 
 ```bash
-$ npx @nestjs/observe link
+# Run unit tests
+npm test
+
+# Run e2e tests
+npm run test:e2e
+
+# Run tests with coverage
+npm run test:cov
+
+# Run linter
+npm run lint
 ```
 
-It installs `@nestjs/observe`, wires it into `AppModule` and `main.ts`, and writes the app key and secret into `.env`, which every `nest start` script (`start`, `start:dev`, `start:debug`) then loads. In production, set `OBSERVE_APP_KEY` and `OBSERVE_APP_SECRET` in the environment instead.
+---
 
-Or do it by hand:
+## Prisma Commands
 
 ```bash
-$ npm install @nestjs/observe
+# Generate Prisma Client
+npm run prisma:generate
+# or: npx prisma generate
+
+# Create and apply migrations in development
+npm run prisma:migrate
+# or: npx prisma migrate dev
+
+# Push schema directly to database (prototype/sync)
+npx prisma db push
+
+# Introspect database into schema.prisma
+npx prisma db pull
+
+# Open visual database browser GUI (http://localhost:5555)
+npm run prisma:studio
+# or: npx prisma studio
 ```
 
-Then follow the [setup guide](https://docs.nestjs.com/observability/sdk) - it takes a single import and an app key.
+### Query Ingested Webhooks (SQL)
 
-The free plan needs no payment details and covers 300,000 events a month. You can also browse the [live demo](https://www.observe-demo.nestjs.com/dashboard) first - the whole dashboard over a busy service's data, with nothing to install.
+```sql
+SELECT event_id, event_type, status, payload, received_at 
+FROM webhook_events 
+ORDER BY received_at DESC;
+```
 
-## Resources
+---
 
-Check out a few resources that may come in handy when working with NestJS:
+## Webhook Testing Commands
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observe](https://observe.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+Test `POST /webhooks` manually using **cURL** or **PowerShell**:
 
-## Support
+### 1. Ingest Valid Webhook Event (202 Accepted)
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+**cURL:**
+```bash
+curl -i -X POST http://localhost:3001/webhooks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "eventId": "evt_123",
+    "type": "order.created",
+    "data": {
+      "orderId": "ORD-1001",
+      "customerId": "CUS-42",
+      "simulate": "fail_then_succeed:2"
+    }
+  }'
+```
 
-## Stay in touch
+**PowerShell:**
+```powershell
+Invoke-RestMethod -Uri "http://localhost:3001/webhooks" -Method Post -ContentType "application/json" -Body '{
+  "eventId": "evt_123",
+  "type": "order.created",
+  "data": {
+    "orderId": "ORD-1001",
+    "customerId": "CUS-42",
+    "simulate": "fail_then_succeed:2"
+  }
+}'
+```
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+**Expected Response:**
+```json
+HTTP/1.1 202 Accepted
+{
+  "status": "accepted",
+  "eventId": "evt_123"
+}
+```
 
-## License
+---
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+### 2. Duplicate Delivery with Different Payload (Idempotency - 202 Accepted)
+
+Delivering the same `eventId` with a different payload preserves the original event in the database and ignores the later payload:
+
+**cURL:**
+```bash
+curl -i -X POST http://localhost:3001/webhooks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "eventId": "evt_123",
+    "type": "order.updated",
+    "data": {
+      "orderId": "ORD-DIFFERENT",
+      "customerId": "CUS-DIFFERENT"
+    }
+  }'
+```
+
+**PowerShell:**
+```powershell
+Invoke-RestMethod -Uri "http://localhost:3001/webhooks" -Method Post -ContentType "application/json" -Body '{
+  "eventId": "evt_123",
+  "type": "order.updated",
+  "data": {
+    "orderId": "ORD-DIFFERENT",
+    "customerId": "CUS-DIFFERENT"
+  }
+}'
+```
+
+**Expected Response:**
+```json
+HTTP/1.1 202 Accepted
+{
+  "status": "accepted",
+  "eventId": "evt_123"
+}
+```
+
+---
+
+### 3. Schema Validation Error (400 Bad Request)
+
+Sending a payload missing required fields (e.g. missing `eventId` or `orderId`):
+
+**cURL:**
+```bash
+curl -i -X POST http://localhost:3001/webhooks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "order.created",
+    "data": {
+      "customerId": "CUS-42"
+    }
+  }'
+```
+
+**PowerShell:**
+```powershell
+Invoke-RestMethod -Uri "http://localhost:3001/webhooks" -Method Post -ContentType "application/json" -Body '{
+  "type": "order.created",
+  "data": {
+    "customerId": "CUS-42"
+  }
+}'
+```
+
+**Expected Response:**
+```json
+HTTP/1.1 400 Bad Request
+{
+  "message": [
+    "eventId must be a string",
+    "eventId should not be empty",
+    "data.orderId must be a string",
+    "data.orderId should not be empty"
+  ],
+  "error": "Bad Request",
+  "statusCode": 400
+}
+```
