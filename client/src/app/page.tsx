@@ -46,10 +46,20 @@ export default function WebhookProcessorDashboard() {
           startedAt: att.startedAt,
           finishedAt: att.finishedAt,
           durationMs: att.durationMs,
-          statusCode: att.result === 'success' ? 200 : 500,
+          statusCode:
+            att.result === 'success'
+              ? 200
+              : att.result === 'failure'
+                ? 500
+                : undefined,
           errorMessage: att.error || att.errorMessage,
           responseBody: att.result ? JSON.stringify({ result: att.result }) : undefined,
-          status: att.result === 'success' ? 'success' : 'failed',
+          status:
+            att.result === 'success'
+              ? 'success'
+              : att.result === 'failure'
+                ? 'failed'
+                : 'processing',
           workerId: att.workerId,
         })),
       }));
@@ -204,12 +214,21 @@ export default function WebhookProcessorDashboard() {
           timestamp: started,
           statusCode:
             att.statusCode ??
-            (att.result === 'success' ? 200 : att.result ? 500 : undefined),
+            (att.result === 'success'
+              ? 200
+              : att.result === 'failure'
+                ? 500
+                : undefined),
           durationMs: duration,
           errorMessage: att.error || att.errorMessage,
           error: att.error || att.errorMessage,
           result: att.result,
-          status: att.result === 'success' ? 'success' : 'failed',
+          status:
+            att.result === 'success'
+              ? 'success'
+              : att.result === 'failure'
+                ? 'failed'
+                : 'processing',
           responseBody: att.responseBody,
         };
       });

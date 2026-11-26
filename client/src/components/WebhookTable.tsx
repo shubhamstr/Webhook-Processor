@@ -415,10 +415,16 @@ export const WebhookTable: React.FC<WebhookTableProps> = ({
                                       ) : (
                                         <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
                                           {apiAttempts.map((attempt: RetryAttempt, idx: number) => {
+                                            const isRunning =
+                                              !attempt.result &&
+                                              !attempt.finishedAt &&
+                                              (attempt.status === 'processing' || !attempt.status);
+
                                             const isSuccess =
-                                              attempt.status === 'success' ||
-                                              attempt.result === 'success' ||
-                                              (attempt.statusCode && attempt.statusCode < 400);
+                                              !isRunning &&
+                                              (attempt.status === 'success' ||
+                                                attempt.result === 'success' ||
+                                                (attempt.statusCode && attempt.statusCode < 400));
 
                                             const attemptTime =
                                               attempt.timestamp || attempt.startedAt || attempt.finishedAt;
@@ -429,9 +435,11 @@ export const WebhookTable: React.FC<WebhookTableProps> = ({
                                               <div
                                                 key={attempt.id || idx}
                                                 className={`p-3 rounded-lg border text-xs space-y-1.5 ${
-                                                  isSuccess
-                                                    ? 'border-emerald-200 bg-emerald-50/40'
-                                                    : 'border-red-200 bg-red-50/40'
+                                                  isRunning
+                                                    ? 'border-amber-200 bg-amber-50/40'
+                                                    : isSuccess
+                                                      ? 'border-emerald-200 bg-emerald-50/40'
+                                                      : 'border-red-200 bg-red-50/40'
                                                 }`}
                                               >
                                                 <div className="flex items-center justify-between">
@@ -439,20 +447,31 @@ export const WebhookTable: React.FC<WebhookTableProps> = ({
                                                     <span className="font-bold text-gray-900">
                                                       Attempt #{attempt.attemptNumber}
                                                     </span>
-                                                    <span
-                                                      className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
-                                                        isSuccess
-                                                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                                                          : 'bg-red-100 text-red-800 border border-red-200'
-                                                      }`}
-                                                    >
-                                                      {attempt.statusCode ? `HTTP ${attempt.statusCode} ` : ''}
-                                                      {isSuccess ? 'Success' : 'Failed'}
-                                                    </span>
+                                                    {isRunning ? (
+                                                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                                                        <Loader2 className="w-3 h-3 animate-spin text-amber-600" />
+                                                        In Progress
+                                                      </span>
+                                                    ) : (
+                                                      <span
+                                                        className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
+                                                          isSuccess
+                                                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                                            : 'bg-red-100 text-red-800 border border-red-200'
+                                                        }`}
+                                                      >
+                                                        {attempt.statusCode ? `HTTP ${attempt.statusCode} ` : ''}
+                                                        {isSuccess ? 'Success' : 'Failed'}
+                                                      </span>
+                                                    )}
                                                   </div>
 
                                                   <div className="text-gray-500 text-[11px]">
-                                                    {attempt.durationMs ? `${attempt.durationMs}ms • ` : ''}
+                                                    {isRunning
+                                                      ? 'Executing... • '
+                                                      : attempt.durationMs
+                                                        ? `${attempt.durationMs}ms • `
+                                                        : ''}
                                                     {formatDate(attemptTime)}
                                                   </div>
                                                 </div>

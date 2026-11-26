@@ -371,6 +371,44 @@ describe('WorkersService', () => {
         }),
       });
     });
+
+    it('should handle simulate=slow without number and default to 5s delay', async () => {
+      const slowEvent: ClaimedWebhookEvent = {
+        ...sampleEvent,
+        payload: { orderId: 'ORD-SLOW-DEFAULT', simulate: 'slow' },
+      };
+
+      // Mock sleep on the underlying worker to avoid 5 second test stall
+      const worker = service.getWorker('worker-alpha');
+      jest.spyOn(worker as any, 'sleep').mockResolvedValueOnce(undefined);
+
+      (
+        mockPrismaService.processingAttempt.create as jest.Mock
+      ).mockResolvedValueOnce({
+        id: 'attempt-uuid-slow-default',
+        attemptNumber: 1,
+      });
+      (
+        mockPrismaService.processedOrder.upsert as jest.Mock
+      ).mockResolvedValueOnce({});
+      (
+        mockPrismaService.processingAttempt.update as jest.Mock
+      ).mockResolvedValueOnce({});
+      (
+        mockPrismaService.webhookEvent.update as jest.Mock
+      ).mockResolvedValue({
+        id: sampleEvent.id,
+      });
+
+      await service.processEvent(slowEvent, 'worker-alpha');
+
+      expect(mockPrismaService.processingAttempt.update).toHaveBeenCalledWith({
+        where: { id: 'attempt-uuid-slow-default' },
+        data: expect.objectContaining({
+          result: 'success',
+        }),
+      });
+    });
   });
 
   describe('worker loop execution', () => {

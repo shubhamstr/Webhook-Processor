@@ -214,7 +214,9 @@ export abstract class BaseWorkerService {
 
     try {
       const payload = (event.payload || {}) as Record<string, unknown>;
-      const simulate = payload.simulate as string | undefined;
+      const simulate = (payload.simulate || payload.simulation) as
+        | string
+        | undefined;
 
       // Handle test simulation flags
       if (simulate && simulate !== 'ok') {
@@ -235,8 +237,24 @@ export abstract class BaseWorkerService {
           );
         }
 
-        if (simulate.startsWith('fail_then_succeed:')) {
-          const failAttempts = parseInt(simulate.split(':')[1], 10) || 1;
+        if (
+          simulate === 'fail_then_succeed' ||
+          simulate.startsWith('fail_then_succeed:') ||
+          simulate.startsWith('fail_then_succeed=') ||
+          simulate.startsWith('fail_then_succeed_')
+        ) {
+          let failAttempts = 1;
+          if (
+            simulate.includes(':') ||
+            simulate.includes('=') ||
+            simulate.includes('_')
+          ) {
+            const part = simulate.split(/[:=_]/)[1];
+            const parsed = parseInt(part, 10);
+            if (!isNaN(parsed)) {
+              failAttempts = Math.max(1, parsed);
+            }
+          }
           if (attemptNumber <= failAttempts) {
             throw new Error(
               `Simulated transient failure (attempt ${attemptNumber}/${failAttempts}) for event ${event.eventId}`,
@@ -244,23 +262,37 @@ export abstract class BaseWorkerService {
           }
         }
 
-        if (simulate.startsWith('slow:')) {
-          const seconds = parseInt(simulate.split(':')[1], 10) || 1;
+        if (
+          simulate === 'slow' ||
+          simulate.startsWith('slow:') ||
+          simulate.startsWith('slow=') ||
+          simulate.startsWith('slow_')
+        ) {
+          let seconds = 5;
+          if (
+            simulate.includes(':') ||
+            simulate.includes('=') ||
+            simulate.includes('_')
+          ) {
+            const part = simulate.split(/[:=_]/)[1];
+            const parsed = parseInt(part, 10);
+            if (!isNaN(parsed)) {
+              seconds = Math.max(0, parsed);
+            }
+          }
           if (seconds > 0) {
             this.logger.log(
               `[${workerId}] Simulating slow execution (${seconds}s) for event '${event.eventId}'`,
             );
-            // If duration meets or exceeds worker lease duration, extend lease to prevent premature reclaim
-            if (seconds >= this.leaseDurationSeconds) {
-              await this.prisma.webhookEvent.update({
-                where: { id: event.id },
-                data: {
-                  leaseExpiresAt: new Date(
-                    Date.now() + (seconds + this.leaseDurationSeconds) * 1000,
-                  ),
-                },
-              });
-            }
+            // Ensure lease covers the slow simulation plus worker lease duration to prevent premature reclaim
+            await this.prisma.webhookEvent.update({
+              where: { id: event.id },
+              data: {
+                leaseExpiresAt: new Date(
+                  Date.now() + (seconds + this.leaseDurationSeconds) * 1000,
+                ),
+              },
+            });
             await this.sleep(seconds * 1000);
           }
         }

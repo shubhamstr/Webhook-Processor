@@ -18,6 +18,8 @@
     "start:prod": "node dist/main",
     "worker:1": "ts-node -r tsconfig-paths/register src/workers/worker-1-runner.ts",
     "worker:2": "ts-node -r tsconfig-paths/register src/workers/worker-2-runner.ts",
+    "worker:1:watch": "node --watch -r ts-node/register -r tsconfig-paths/register src/workers/worker-1-runner.ts",
+    "worker:2:watch": "node --watch -r ts-node/register -r tsconfig-paths/register src/workers/worker-2-runner.ts",
     "worker:1:prod": "node dist/workers/worker-1-runner",
     "worker:2:prod": "node dist/workers/worker-2-runner",
     "lint": "oxlint --type-aware src/ test/",

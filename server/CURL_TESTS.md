@@ -184,8 +184,8 @@ curl -i -X POST http://localhost:3001/webhooks \
 
 ---
 
-### 2.5 Worker Simulation: Slow Processing (`simulate: "slow:N"`)
-Takes N seconds, then succeeds. If N exceeds the worker lease duration (e.g. 30s), the lease is automatically extended in the database to prevent premature lease reclaim by other workers.
+### 2.5 Worker Simulation: Slow Processing (`simulate: "slow"` or `simulate: "slow:N"`)
+Takes N seconds (defaults to 5 seconds if unspecified with `"slow"`), then succeeds. The lease is automatically extended in the database to prevent premature lease reclaim by other workers during execution.
 
 ```bash
 curl -i -X POST http://localhost:3001/webhooks \
@@ -197,6 +197,21 @@ curl -i -X POST http://localhost:3001/webhooks \
       "orderId": "ORD-SLOW-01",
       "customerId": "CUS-42",
       "simulate": "slow:5"
+    }
+  }'
+```
+
+Or simply using `"simulate": "slow"`:
+```bash
+curl -i -X POST http://localhost:3001/webhooks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "eventId": "evt_sim_slow_5004",
+    "type": "order.created",
+    "data": {
+      "orderId": "ORD-SLOW-02",
+      "customerId": "CUS-42",
+      "simulate": "slow"
     }
   }'
 ```

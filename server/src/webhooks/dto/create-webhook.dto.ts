@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   IsNotEmpty,
   IsObject,
+  IsOptional,
   IsString,
   ValidateNested,
 } from 'class-validator';
@@ -15,6 +16,10 @@ export class CreateWebhookDto {
   @IsString()
   @IsNotEmpty()
   type: string;
+
+  @IsOptional()
+  @IsString()
+  simulate?: string;
 
   @IsObject()
   @IsNotEmpty()

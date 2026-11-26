@@ -26,11 +26,18 @@ export class WebhooksService {
     }
 
     try {
+      const payloadData: Record<string, unknown> = {
+        ...dto.data,
+      };
+      if (dto.simulate && !dto.data?.simulate) {
+        payloadData.simulate = dto.simulate;
+      }
+
       const created = await this.prisma.webhookEvent.create({
         data: {
           eventId: dto.eventId,
           eventType: dto.type,
-          payload: dto.data as unknown as Prisma.InputJsonValue,
+          payload: payloadData as unknown as Prisma.InputJsonValue,
           status: 'pending',
         },
       });
