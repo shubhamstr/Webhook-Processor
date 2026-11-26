@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma';
 import { GetEventsQueryDto } from './dto';
@@ -189,6 +194,13 @@ export class EventsService {
 
     if (!event) {
       throw new NotFoundException(`Event with ID '${id}' not found`);
+    }
+
+    const normStatus = (event.status || '').toLowerCase().replace(/_/g, ' ').trim();
+    if (normStatus !== 'failed' && normStatus !== 'permanently failed') {
+      throw new BadRequestException(
+        `Only permanently failed events can be retried (current status: '${event.status}')`,
+      );
     }
 
     const updated = await this.prisma.webhookEvent.update({

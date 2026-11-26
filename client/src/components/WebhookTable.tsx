@@ -150,6 +150,10 @@ export const WebhookTable: React.FC<WebhookTableProps> = ({
                 const displayId = evt.eventId || evt.id;
                 const displayType = evt.eventType || evt.type || 'unknown';
                 const receivedTime = evt.receivedAt || evt.createdAt;
+                const normalizedStatus = (evt.status || '').toLowerCase().replace(/_/g, ' ').trim();
+                const isPermanentlyFailed =
+                  normalizedStatus === 'permanently failed' || normalizedStatus === 'failed';
+                const showRetryButton = isPermanentlyFailed || retryingIds.has(evt.id);
 
                 return (
                   <React.Fragment key={evt.id}>
@@ -220,21 +224,22 @@ export const WebhookTable: React.FC<WebhookTableProps> = ({
 
                       {/* Action */}
                       <td className="py-3.5 px-4 text-right">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onRetry(evt.id);
-                          }}
-                          disabled={isRetrying}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium transition cursor-pointer ${
-                            evt.status === 'permanently failed' || evt.status === 'failed'
-                              ? 'bg-red-600 hover:bg-red-700 text-white'
-                              : 'bg-blue-600 hover:bg-blue-700 text-white'
-                          } disabled:opacity-50 disabled:cursor-not-allowed`}
-                        >
-                          <RotateCw className={`w-3 h-3 ${isRetrying ? 'animate-spin' : ''}`} />
-                          <span>{isRetrying ? 'Retrying...' : 'Retry'}</span>
-                        </button>
+                        {showRetryButton ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRetry(evt.id);
+                            }}
+                            disabled={isRetrying}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium transition cursor-pointer bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Retry permanently failed event"
+                          >
+                            <RotateCw className={`w-3 h-3 ${isRetrying ? 'animate-spin' : ''}`} />
+                            <span>{isRetrying ? 'Retrying...' : 'Retry'}</span>
+                          </button>
+                        ) : (
+                          <span className="text-gray-300 select-none">-</span>
+                        )}
                       </td>
                     </tr>
 

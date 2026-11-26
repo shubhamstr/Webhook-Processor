@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { jest } from '@jest/globals';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../src/prisma';
 import { EventsService } from '../src/events/events.service';
@@ -304,6 +304,20 @@ describe('EventsService', () => {
 
       await expect(service.retry('evt_missing')).rejects.toThrow(
         NotFoundException,
+      );
+    });
+
+    it('should throw BadRequestException if event is not permanently failed', async () => {
+      const mockExisting = {
+        id: 'uuid-1',
+        eventId: 'evt_100',
+        status: 'completed',
+      };
+
+      mockPrismaService.webhookEvent.findFirst.mockResolvedValue(mockExisting);
+
+      await expect(service.retry('evt_100')).rejects.toThrow(
+        BadRequestException,
       );
     });
   });
