@@ -2,6 +2,7 @@ process.env.STANDALONE_WORKER = 'worker-1';
 process.env.WORKERS_AUTO_START = 'false';
 
 import { NestFactory } from '@nestjs/core';
+import { Logger } from 'nestjs-pino';
 import { AppModule } from '../app.module';
 import { Worker1Service } from './worker-1.service';
 
@@ -10,19 +11,25 @@ import { Worker1Service } from './worker-1.service';
  * Usage: npm run worker:1
  */
 async function bootstrapWorker1() {
-  console.log('====================================================');
-  console.log(' Starting Standalone Webhook Worker 1 (CMD Process) ');
-  console.log('====================================================');
+  const app = await NestFactory.createApplicationContext(AppModule, {
+    bufferLogs: true,
+  });
+  const logger = app.get(Logger);
+  app.useLogger(logger);
 
-  const app = await NestFactory.createApplicationContext(AppModule);
   const worker1Service = app.get(Worker1Service);
-
-  console.log(`[Worker 1] Initialized with ID: '${worker1Service.workerId}'`);
-  console.log(`[Worker 1] Polling and processing events... Press Ctrl+C to stop.`);
+  logger.log(
+    `Starting Standalone Webhook Worker 1 [${worker1Service.workerId}]`,
+    'Worker1Runner',
+  );
+  logger.log(
+    'Polling and processing events... Press Ctrl+C to stop.',
+    'Worker1Runner',
+  );
   worker1Service.start();
 
   const shutdown = async () => {
-    console.log('\n--- Shutting down Standalone Worker 1 ---');
+    logger.log('Shutting down Standalone Worker 1...', 'Worker1Runner');
     worker1Service.stop();
     await app.close();
     process.exit(0);

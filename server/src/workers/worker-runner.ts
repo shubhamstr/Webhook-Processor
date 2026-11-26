@@ -2,6 +2,7 @@ process.env.STANDALONE_WORKER = 'all';
 process.env.WORKERS_AUTO_START = 'false';
 
 import { NestFactory } from '@nestjs/core';
+import { Logger } from 'nestjs-pino';
 import { AppModule } from '../app.module';
 import { Worker1Service } from './worker-1.service';
 import { Worker2Service } from './worker-2.service';
@@ -19,17 +20,22 @@ async function bootstrapWorkers() {
   const runOnly1 = args.includes('1') || args.includes('--worker=1');
   const runOnly2 = args.includes('2') || args.includes('--worker=2');
 
-  const app = await NestFactory.createApplicationContext(AppModule);
+  const app = await NestFactory.createApplicationContext(AppModule, {
+    bufferLogs: true,
+  });
+  const logger = app.get(Logger);
+  app.useLogger(logger);
 
   if (runOnly1) {
     const worker1 = app.get(Worker1Service);
-    console.log('====================================================');
-    console.log(` Starting Standalone Worker 1 [${worker1.workerId}]`);
-    console.log('====================================================');
+    logger.log(
+      `Starting Standalone Worker 1 [${worker1.workerId}]`,
+      'WorkerRunner',
+    );
     worker1.start();
 
     const shutdown = async () => {
-      console.log('\n--- Shutting down Worker 1 ---');
+      logger.log('Shutting down Worker 1...', 'WorkerRunner');
       worker1.stop();
       await app.close();
       process.exit(0);
@@ -41,13 +47,14 @@ async function bootstrapWorkers() {
 
   if (runOnly2) {
     const worker2 = app.get(Worker2Service);
-    console.log('====================================================');
-    console.log(` Starting Standalone Worker 2 [${worker2.workerId}]`);
-    console.log('====================================================');
+    logger.log(
+      `Starting Standalone Worker 2 [${worker2.workerId}]`,
+      'WorkerRunner',
+    );
     worker2.start();
 
     const shutdown = async () => {
-      console.log('\n--- Shutting down Worker 2 ---');
+      logger.log('Shutting down Worker 2...', 'WorkerRunner');
       worker2.stop();
       await app.close();
       process.exit(0);
@@ -59,13 +66,17 @@ async function bootstrapWorkers() {
 
   // Default: run both workers
   const workersService = app.get(WorkersService);
-  console.log('====================================================');
-  console.log(' Starting Standalone PostgreSQL Workers (Both 1 & 2)');
-  console.log('====================================================');
+  logger.log(
+    'Starting Standalone PostgreSQL Workers (Both 1 & 2)',
+    'WorkerRunner',
+  );
   workersService.startWorkers();
 
   const shutdown = async () => {
-    console.log('\n--- Shutting down Standalone PostgreSQL Workers ---');
+    logger.log(
+      'Shutting down Standalone PostgreSQL Workers...',
+      'WorkerRunner',
+    );
     workersService.stopWorkers();
     await app.close();
     process.exit(0);
