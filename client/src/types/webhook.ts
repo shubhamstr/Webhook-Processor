@@ -16,6 +16,7 @@ export type WebhookEventType =
   | string;
 
 export interface RetryAttempt {
+  id?: string;
   attemptNumber: number;
   timestamp?: string;
   startedAt?: string;
@@ -64,6 +65,13 @@ export interface WebhookEvent {
   updatedAt?: string;
   lastErrorMessage?: string;
   lastError?: string | null;
+}
+
+export interface EventDetailState {
+  loading: boolean;
+  event: WebhookEvent | null;
+  attempts: RetryAttempt[] | null;
+  error: string | null;
 }
 
 export interface WebhookStats {
