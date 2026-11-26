@@ -393,3 +393,48 @@ curl -i -X GET http://localhost:3001/events/evt_123
 Invoke-RestMethod -Uri "http://localhost:3001/events/evt_123" -Method Get
 ```
 
+---
+
+## Health Check API
+
+The `GET /health` endpoint performs a system and database connectivity health check.
+
+### Health Check (200 OK / 503 Service Unavailable)
+
+**cURL:**
+```bash
+curl -i -X GET http://localhost:3001/health
+```
+
+**PowerShell:**
+```powershell
+Invoke-RestMethod -Uri "http://localhost:3001/health" -Method Get
+```
+
+**Expected Response (200 OK when healthy):**
+```json
+{
+  "status": "ok",
+  "timestamp": "2026-11-26T13:54:00.000Z",
+  "uptime": 12.34,
+  "database": {
+    "status": "up",
+    "latencyMs": 2
+  }
+}
+```
+
+**Expected Response (503 Service Unavailable when database unreachable):**
+```json
+{
+  "status": "error",
+  "timestamp": "2026-11-26T13:54:00.000Z",
+  "uptime": 12.34,
+  "database": {
+    "status": "down",
+    "error": "Database connection failed"
+  }
+}
+```
+
+
