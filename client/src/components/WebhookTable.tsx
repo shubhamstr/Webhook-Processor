@@ -504,7 +504,11 @@ export const WebhookTable: React.FC<WebhookTableProps> = ({
                                                         }`}
                                                       >
                                                         {attempt.statusCode ? `HTTP ${attempt.statusCode} ` : ''}
-                                                        {isSuccess ? 'Success' : 'Failed'}
+                                                        {isSuccess
+                                                          ? 'Success'
+                                                          : attempt.result === 'abandoned'
+                                                            ? 'Abandoned'
+                                                            : 'Failed'}
                                                       </span>
                                                     )}
                                                   </div>

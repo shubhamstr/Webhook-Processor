@@ -23,7 +23,7 @@ export interface DashboardStatsResponse {
 export class EventsService {
   private readonly logger = new Logger(EventsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async findAll(query: GetEventsQueryDto) {
     const page = query.page && query.page > 0 ? query.page : 1;
@@ -135,21 +135,28 @@ export class EventsService {
       }),
     ]);
 
-    // Deduplicate processing attempts if any duplicate records exist
+    // Auto-heal any stale unfinalized attempts for events that are completed, failed, or whose lease expired
     events.forEach((event) => {
       if (event.processingAttempts && event.processingAttempts.length > 0) {
-        const seenIds = new Set<string>();
-        const seenAttemptKeys = new Set<string>();
-        event.processingAttempts = event.processingAttempts.filter((att) => {
-          if (seenIds.has(att.id)) return false;
-          seenIds.add(att.id);
-
-          const attemptKey = `${att.retryCycle}_${att.attemptNumber}`;
-          if (seenAttemptKeys.has(attemptKey)) return false;
-          seenAttemptKeys.add(attemptKey);
-
-          return true;
-        });
+        const normStatus = (event.status || '').toLowerCase().trim();
+        const leaseExpired = !!(
+          event.leaseExpiresAt && new Date(event.leaseExpiresAt) < new Date()
+        );
+        if (
+          normStatus === 'completed' ||
+          normStatus === 'failed' ||
+          normStatus === 'permanently failed' ||
+          leaseExpired
+        ) {
+          event.processingAttempts.forEach((att) => {
+            if (!att.result || !att.finishedAt) {
+              att.result = 'failure';
+              att.error =
+                att.error || 'Worker crashed or lease expired before completion';
+              att.finishedAt = att.finishedAt || event.updatedAt || getISTDate();
+            }
+          });
+        }
       }
     });
 
@@ -177,8 +184,8 @@ export class EventsService {
     const event = await this.prisma.webhookEvent.findFirst({
       where: isUuid
         ? {
-            OR: [{ id }, { eventId: id }],
-          }
+          OR: [{ id }, { eventId: id }],
+        }
         : { eventId: id },
       include: {
         processingAttempts: {
@@ -194,20 +201,45 @@ export class EventsService {
       throw new NotFoundException(`Event with ID '${id}' not found`);
     }
 
-    // Deduplicate processingAttempts if any duplicate records exist
-    if (event.processingAttempts && event.processingAttempts.length > 0) {
-      const seenIds = new Set<string>();
-      const seenAttemptKeys = new Set<string>();
-      event.processingAttempts = event.processingAttempts.filter((att) => {
-        if (seenIds.has(att.id)) return false;
-        seenIds.add(att.id);
-
-        const attemptKey = `${att.retryCycle}_${att.attemptNumber}`;
-        if (seenAttemptKeys.has(attemptKey)) return false;
-        seenAttemptKeys.add(attemptKey);
-
-        return true;
-      });
+    // Auto-heal any stale unfinalized attempts for events that are completed, failed, or whose lease expired
+    const normStatus = (event.status || '').toLowerCase().trim();
+    const leaseExpired = !!(
+      event.leaseExpiresAt && new Date(event.leaseExpiresAt) < new Date()
+    );
+    if (
+      normStatus === 'completed' ||
+      normStatus === 'failed' ||
+      normStatus === 'permanently failed' ||
+      leaseExpired
+    ) {
+      if (event.processingAttempts && event.processingAttempts.length > 0) {
+        let hasUnfinalized = false;
+        event.processingAttempts.forEach((att) => {
+          if (!att.result || !att.finishedAt) {
+            hasUnfinalized = true;
+            att.result = 'failure';
+            att.error =
+              att.error || 'Worker crashed or lease expired before completion';
+            att.finishedAt = att.finishedAt || event.updatedAt || getISTDate();
+          }
+        });
+        if (
+          hasUnfinalized &&
+          typeof this.prisma.processingAttempt?.updateMany === 'function'
+        ) {
+          await this.prisma.processingAttempt.updateMany({
+            where: {
+              eventId: event.id,
+              OR: [{ result: null }, { finishedAt: null }],
+            },
+            data: {
+              result: 'failure',
+              error: 'Worker crashed or lease expired before completion',
+              finishedAt: event.updatedAt || getISTDate(),
+            },
+          });
+        }
+      }
     }
 
     return event;
@@ -222,14 +254,40 @@ export class EventsService {
     const event = await this.prisma.webhookEvent.findFirst({
       where: isUuid
         ? {
-            OR: [{ id }, { eventId: id }],
-          }
+          OR: [{ id }, { eventId: id }],
+        }
         : { eventId: id },
-      select: { id: true },
+      select: { id: true, status: true, leaseExpiresAt: true, updatedAt: true },
     });
 
     if (!event) {
       throw new NotFoundException(`Event with ID '${id}' not found`);
+    }
+
+    // Auto-heal any stale unfinalized attempts for events that are completed, failed, or whose lease expired
+    const normStatus = (event.status || '').toLowerCase().trim();
+    const leaseExpired = !!(
+      event.leaseExpiresAt && new Date(event.leaseExpiresAt) < new Date()
+    );
+    if (
+      normStatus === 'completed' ||
+      normStatus === 'failed' ||
+      normStatus === 'permanently failed' ||
+      leaseExpired
+    ) {
+      if (typeof this.prisma.processingAttempt?.updateMany === 'function') {
+        await this.prisma.processingAttempt.updateMany({
+          where: {
+            eventId: event.id,
+            OR: [{ result: null }, { finishedAt: null }],
+          },
+          data: {
+            result: 'failure',
+            error: 'Worker crashed or lease expired before completion',
+            finishedAt: event.updatedAt || getISTDate(),
+          },
+        });
+      }
     }
 
     const attempts = await this.prisma.processingAttempt.findMany({
@@ -240,19 +298,7 @@ export class EventsService {
       ],
     });
 
-    // Deduplicate attempts by id and (retryCycle, attemptNumber) to prevent any duplicate data
-    const seenIds = new Set<string>();
-    const seenAttemptKeys = new Set<string>();
-    return attempts.filter((att) => {
-      if (seenIds.has(att.id)) return false;
-      seenIds.add(att.id);
-
-      const attemptKey = `${att.retryCycle}_${att.attemptNumber}`;
-      if (seenAttemptKeys.has(attemptKey)) return false;
-      seenAttemptKeys.add(attemptKey);
-
-      return true;
-    });
+    return attempts;
   }
 
   async retry(id: string) {
@@ -264,8 +310,8 @@ export class EventsService {
     const event = await this.prisma.webhookEvent.findFirst({
       where: isUuid
         ? {
-            OR: [{ id }, { eventId: id }],
-          }
+          OR: [{ id }, { eventId: id }],
+        }
         : { eventId: id },
     });
 

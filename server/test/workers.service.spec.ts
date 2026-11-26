@@ -18,6 +18,8 @@ describe('WorkersService', () => {
     processingAttempt: {
       create: jest.fn(),
       update: jest.fn(),
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     processedOrder: {
       upsert: jest.fn(),
@@ -212,6 +214,77 @@ describe('WorkersService', () => {
           leaseExpiresAt: null,
         }),
       });
+    });
+
+    it('should finalize abandoned attempt on worker crash recovery and assign incremented attemptNumber', async () => {
+      const abandonedAttempt = {
+        id: 'crashed-attempt-uuid',
+        eventId: sampleEvent.id,
+        attemptNumber: 1,
+        retryCycle: 1,
+        workerId: 'crashed-worker',
+        startedAt: new Date(Date.now() - 60000),
+        finishedAt: null,
+        result: null,
+        error: null,
+      };
+
+      (
+        mockPrismaService.processingAttempt.findMany as jest.Mock
+      )
+        .mockResolvedValueOnce([abandonedAttempt])
+        .mockResolvedValueOnce([abandonedAttempt]);
+
+      (
+        mockPrismaService.processingAttempt.create as jest.Mock
+      ).mockResolvedValueOnce({
+        id: 'attempt-uuid-2',
+        attemptNumber: 2,
+      });
+      (
+        mockPrismaService.processedOrder.upsert as jest.Mock
+      ).mockResolvedValueOnce({
+        eventId: sampleEvent.id,
+        orderId: 'ORD-999',
+      });
+      (
+        mockPrismaService.processingAttempt.update as jest.Mock
+      ).mockResolvedValue({});
+      (
+        mockPrismaService.webhookEvent.update as jest.Mock
+      ).mockResolvedValueOnce({});
+
+      await service.processEvent(sampleEvent, 'worker-beta');
+
+      expect(mockPrismaService.processingAttempt.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'crashed-attempt-uuid' },
+          data: expect.objectContaining({
+            result: 'failure',
+            error: expect.stringContaining('crashed or lease expired'),
+          }),
+        }),
+      );
+
+      expect(mockPrismaService.processingAttempt.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            eventId: sampleEvent.id,
+            attemptNumber: 2,
+            workerId: 'worker-beta',
+          }),
+        }),
+      );
+
+      expect(mockPrismaService.webhookEvent.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: sampleEvent.id },
+          data: expect.objectContaining({
+            status: 'completed',
+            totalAttempts: 2,
+          }),
+        }),
+      );
     });
 
     it('should handle failure and reschedule with exponential backoff if below maxAttempts', async () => {

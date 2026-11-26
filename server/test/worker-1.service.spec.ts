@@ -14,6 +14,8 @@ describe('Worker2Service', () => {
     processingAttempt: {
       create: jest.fn(),
       update: jest.fn(),
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     processedOrder: {
       upsert: jest.fn(),

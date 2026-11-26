@@ -274,7 +274,7 @@ describe('EventsService', () => {
 
       expect(prisma.webhookEvent.findFirst).toHaveBeenCalledWith({
         where: { eventId: 'evt_custom_1' },
-        select: { id: true },
+        select: expect.objectContaining({ id: true }),
       });
       expect(prisma.processingAttempt.findMany).toHaveBeenCalledWith({
         where: { eventId: mockEvent.id },
@@ -291,9 +291,9 @@ describe('EventsService', () => {
       );
     });
 
-    it('should deduplicate any duplicate attempt records', async () => {
+    it('should return all recorded attempt history without discarding attempts', async () => {
       const mockEvent = { id: '992a54fb-5246-4ad1-a96c-b26a6dbbb0fa' };
-      const mockAttemptsWithDuplicates = [
+      const mockAttempts = [
         {
           id: 'attempt-1',
           eventId: mockEvent.id,
@@ -303,31 +303,7 @@ describe('EventsService', () => {
           startedAt: new Date('2026-11-26T10:00:00Z'),
           finishedAt: new Date('2026-11-26T10:00:01Z'),
           result: 'failure',
-          error: 'Timeout error',
-        },
-        {
-          // Duplicate id
-          id: 'attempt-1',
-          eventId: mockEvent.id,
-          attemptNumber: 1,
-          retryCycle: 1,
-          workerId: 'worker-1',
-          startedAt: new Date('2026-11-26T10:00:00Z'),
-          finishedAt: new Date('2026-11-26T10:00:01Z'),
-          result: 'failure',
-          error: 'Timeout error',
-        },
-        {
-          // Duplicate retryCycle & attemptNumber
-          id: 'attempt-1-duplicate',
-          eventId: mockEvent.id,
-          attemptNumber: 1,
-          retryCycle: 1,
-          workerId: 'worker-2',
-          startedAt: new Date('2026-11-26T10:00:05Z'),
-          finishedAt: new Date('2026-11-26T10:00:06Z'),
-          result: 'failure',
-          error: 'Timeout error',
+          error: 'Worker crashed or lease expired before completion',
         },
         {
           id: 'attempt-2',
@@ -343,7 +319,7 @@ describe('EventsService', () => {
       ];
 
       mockPrismaService.webhookEvent.findFirst.mockResolvedValue(mockEvent);
-      mockPrismaService.processingAttempt.findMany.mockResolvedValue(mockAttemptsWithDuplicates);
+      mockPrismaService.processingAttempt.findMany.mockResolvedValue(mockAttempts);
 
       const result = await service.findAttempts('evt_custom_1');
 

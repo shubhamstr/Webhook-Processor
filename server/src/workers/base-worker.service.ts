@@ -198,8 +198,59 @@ export abstract class BaseWorkerService {
     event: ClaimedWebhookEvent,
     workerId: string = this.workerId,
   ): Promise<void> {
-    const attemptNumber = (event.totalAttempts ?? 0) + 1;
-    const retryCycle = (event.cycleAttempts ?? 0) + 1;
+    const istNow = getISTDate();
+
+    // 1. Detect and finalize any unfinalized attempts from crashed workers whose lease expired
+    if (typeof this.prisma.processingAttempt?.findMany === 'function') {
+      const unfinalizedAttempts = await this.prisma.processingAttempt.findMany({
+        where: {
+          eventId: event.id,
+          OR: [{ result: null }, { finishedAt: null }],
+        },
+      });
+
+      if (unfinalizedAttempts && unfinalizedAttempts.length > 0) {
+        for (const unfinalized of unfinalizedAttempts) {
+          if (typeof this.prisma.processingAttempt?.update === 'function') {
+            await this.prisma.processingAttempt.update({
+              where: { id: unfinalized.id },
+              data: {
+                result: 'failure',
+                error: `Worker '${unfinalized.workerId || 'unknown'}' crashed or lease expired before completion`,
+                finishedAt: istNow,
+              },
+            });
+          }
+          this.logger.warn(
+            `[${workerId}] Marked abandoned attempt #${unfinalized.attemptNumber} (worker: ${unfinalized.workerId}) as failed due to worker crash/lease expiry for event '${event.eventId}'`,
+          );
+        }
+      }
+    }
+
+    // 2. Accurately calculate the new attemptNumber and retryCycle taking into account all prior attempts
+    let maxPreviousAttempt = event.totalAttempts ?? 0;
+    let maxPreviousCycle = event.cycleAttempts ?? 0;
+
+    if (typeof this.prisma.processingAttempt?.findMany === 'function') {
+      const existingAttempts = await this.prisma.processingAttempt.findMany({
+        where: { eventId: event.id },
+        select: { attemptNumber: true, retryCycle: true },
+      });
+      if (existingAttempts && existingAttempts.length > 0) {
+        maxPreviousAttempt = existingAttempts.reduce(
+          (max, a) => Math.max(max, a.attemptNumber || 0),
+          maxPreviousAttempt,
+        );
+        maxPreviousCycle = existingAttempts.reduce(
+          (max, a) => Math.max(max, a.retryCycle || 0),
+          maxPreviousCycle,
+        );
+      }
+    }
+
+    const attemptNumber = maxPreviousAttempt + 1;
+    const retryCycle = maxPreviousCycle + 1;
     const maxAttempts = event.maxAttempts || 5;
 
     // Record processing attempt
@@ -209,7 +260,7 @@ export abstract class BaseWorkerService {
         attemptNumber,
         retryCycle,
         workerId,
-        startedAt: getISTDate(),
+        startedAt: istNow,
       },
     });
 

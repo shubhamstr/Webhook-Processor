@@ -61,7 +61,7 @@ export default function WebhookProcessorDashboard() {
           statusCode:
             att.result === 'success'
               ? 200
-              : att.result === 'failure'
+              : att.result === 'failure' || att.result === 'abandoned'
                 ? 500
                 : undefined,
           errorMessage: att.error || att.errorMessage,
@@ -69,7 +69,7 @@ export default function WebhookProcessorDashboard() {
           status:
             att.result === 'success'
               ? 'success'
-              : att.result === 'failure'
+              : att.result === 'failure' || att.result === 'abandoned'
                 ? 'failed'
                 : 'processing',
           workerId: att.workerId,
@@ -192,7 +192,7 @@ export default function WebhookProcessorDashboard() {
               att.statusCode ??
               (att.result === 'success'
                 ? 200
-                : att.result === 'failure'
+                : att.result === 'failure' || att.result === 'abandoned'
                   ? 500
                   : undefined),
             durationMs: duration,
@@ -202,7 +202,7 @@ export default function WebhookProcessorDashboard() {
             status:
               att.result === 'success'
                 ? 'success'
-                : att.result === 'failure'
+                : att.result === 'failure' || att.result === 'abandoned'
                   ? 'failed'
                   : 'processing',
             responseBody: att.responseBody,
