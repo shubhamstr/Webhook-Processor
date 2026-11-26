@@ -291,25 +291,6 @@ describe('WorkersService', () => {
       });
     });
 
-    it('should simulate crash and leave lease intact for lease expiry recovery', async () => {
-      const crashEvent: ClaimedWebhookEvent = {
-        ...sampleEvent,
-        payload: { orderId: 'ORD-CRASH', simulate: 'crash' },
-      };
-
-      (
-        mockPrismaService.processingAttempt.create as jest.Mock
-      ).mockResolvedValueOnce({
-        id: 'attempt-uuid-4',
-        attemptNumber: 1,
-      });
-
-      await service.processEvent(crashEvent, 'worker-alpha');
-
-      // The attempt should be created, but neither completed nor failed update should happen to the event
-      expect(mockPrismaService.webhookEvent.update).not.toHaveBeenCalled();
-    });
-
     it('should handle simulate=always_fail by throwing and marking attempt as failure', async () => {
       const alwaysFailEvent: ClaimedWebhookEvent = {
         ...sampleEvent,

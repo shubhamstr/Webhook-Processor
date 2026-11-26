@@ -189,7 +189,7 @@ export abstract class BaseWorkerService {
   /**
    * Process a claimed webhook event:
    * - Records processing attempt in processing_attempts table
-   * - Handles payload simulation logic (fail_then_succeed, fail_permanently, crash)
+   * - Handles payload simulation logic (fail_then_succeed, fail_permanently)
    * - Saves processed order for idempotency
    * - On success: sets status='completed', clears lease
    * - On failure: sets status='failed' or calculates exponential backoff next_attempt_at and resets to 'pending'
@@ -221,13 +221,6 @@ export abstract class BaseWorkerService {
 
       // Handle test simulation flags
       if (simulate && simulate !== 'ok') {
-        if (simulate === 'crash') {
-          this.logger.warn(
-            `[${workerId}] Simulating worker crash on event '${event.eventId}'. Lease will expire and be recovered.`,
-          );
-          return;
-        }
-
         if (
           simulate === 'always_fail' ||
           simulate === 'fail_permanently' ||

@@ -218,26 +218,7 @@ curl -i -X POST http://localhost:3001/webhooks \
 
 ---
 
-### 2.6 Worker Simulation: Worker Crash & Lease Recovery (`simulate: "crash"`)
-Simulates an abrupt unhandled worker crash during execution. The leased event will remain in `processing` until its lease expires (`lease_expires_at < NOW()`), after which another worker recovers and re-processes it.
-
-```bash
-curl -i -X POST http://localhost:3001/webhooks \
-  -H "Content-Type: application/json" \
-  -d '{
-    "eventId": "evt_sim_crash_5004",
-    "type": "order.created",
-    "data": {
-      "orderId": "ORD-CRASH-01",
-      "customerId": "CUS-42",
-      "simulate": "crash"
-    }
-  }'
-```
-
----
-
-### 2.7 Idempotency Test: Exact Duplicate Delivery
+### 2.6 Idempotency Test: Exact Duplicate Delivery
 Send the identical `eventId` with the identical payload a second time. The server safely recognizes the duplicate and returns `202 Accepted` without creating duplicate records.
 
 ```bash
@@ -772,12 +753,7 @@ curl.exe -i -X POST http://localhost:3001/webhooks -H "Content-Type: application
 curl.exe -i -X POST http://localhost:3001/webhooks -H "Content-Type: application/json" -d "{\"eventId\":\"evt_cmd_sim_slow\",\"type\":\"order.created\",\"data\":{\"orderId\":\"ORD-CMD-SLOW\",\"customerId\":\"CUS-1\",\"simulate\":\"slow:5\"}}"
 ```
 
-### 7.6 Simulation: `simulate: "crash"` (CMD format):
-```cmd
-curl.exe -i -X POST http://localhost:3001/webhooks -H "Content-Type: application/json" -d "{\"eventId\":\"evt_cmd_sim_crash\",\"type\":\"order.created\",\"data\":{\"orderId\":\"ORD-CMD-CRASH\",\"customerId\":\"CUS-1\",\"simulate\":\"crash\"}}"
-```
-
-### 7.7 Idempotency Exact Duplicate Test (CMD format):
+### 7.6 Idempotency Exact Duplicate Test (CMD format):
 ```cmd
 curl.exe -i -X POST http://localhost:3001/webhooks -H "Content-Type: application/json" -d "{\"eventId\":\"evt_cmd_101\",\"type\":\"order.created\",\"data\":{\"orderId\":\"ORD-CMD-101\",\"customerId\":\"CUS-1\"}}"
 ```
