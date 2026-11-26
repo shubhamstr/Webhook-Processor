@@ -19,6 +19,9 @@ interface WebhookTableProps {
   events: WebhookEvent[];
   onRetry: (eventId: string) => void;
   retryingIds: Set<string>;
+  expandedId?: string | null;
+  onToggleRow?: (event: WebhookEvent) => void;
+  onRefreshDetail?: (event: WebhookEvent) => void;
   onRowClick?: (event: WebhookEvent) => void;
   expandedDetails?: Record<string, EventDetailState>;
 }
@@ -27,28 +30,25 @@ export const WebhookTable: React.FC<WebhookTableProps> = ({
   events,
   onRetry,
   retryingIds,
+  expandedId: controlledExpandedId,
+  onToggleRow,
+  onRefreshDetail,
   onRowClick,
   expandedDetails = {},
 }) => {
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-
-  const toggleRow = (id: string) => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
+  const [internalExpandedId, setInternalExpandedId] = useState<string | null>(null);
+  const expandedId =
+    controlledExpandedId !== undefined ? controlledExpandedId : internalExpandedId;
 
   const handleRowClick = (evt: WebhookEvent) => {
-    const isCurrentlyExpanded = expandedIds.has(evt.id);
-    toggleRow(evt.id);
-    if (!isCurrentlyExpanded && onRowClick) {
-      onRowClick(evt);
+    if (onToggleRow) {
+      onToggleRow(evt);
+    } else {
+      const isCurrentlyExpanded = internalExpandedId === evt.id;
+      setInternalExpandedId(isCurrentlyExpanded ? null : evt.id);
+      if (!isCurrentlyExpanded && onRowClick) {
+        onRowClick(evt);
+      }
     }
   };
 
@@ -132,7 +132,7 @@ export const WebhookTable: React.FC<WebhookTableProps> = ({
               </tr>
             ) : (
               events.map((evt) => {
-                const isExpanded = expandedIds.has(evt.id);
+                const isExpanded = expandedId === evt.id;
                 const isRetrying = retryingIds.has(evt.id) || evt.status === 'processing';
                 const attemptCount = getAttemptCount(evt);
                 const maxAttempts = getMaxAttempts(evt);
@@ -261,7 +261,11 @@ export const WebhookTable: React.FC<WebhookTableProps> = ({
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  onRowClick?.(evt);
+                                  if (onRefreshDetail) {
+                                    onRefreshDetail(evt);
+                                  } else {
+                                    onRowClick?.(evt);
+                                  }
                                 }}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium text-white bg-red-600 hover:bg-red-700 transition cursor-pointer"
                               >
@@ -303,9 +307,10 @@ export const WebhookTable: React.FC<WebhookTableProps> = ({
                                           {apiAttemptCount} / {apiMaxAttempts}
                                         </span>
                                       </div>
-                                      <div className="hidden sm:inline-flex items-center gap-1 text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                      <div className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                                         <Database className="w-3 h-3 text-emerald-600" />
-                                        <span>Live from /events/:id & /events/:id/attempts</span>
+                                        <span>Live Polling (/events/:id & /events/:id/attempts)</span>
                                       </div>
                                     </div>
 
@@ -320,7 +325,11 @@ export const WebhookTable: React.FC<WebhookTableProps> = ({
                                         type="button"
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          onRowClick?.(evt);
+                                          if (onRefreshDetail) {
+                                            onRefreshDetail(evt);
+                                          } else {
+                                            onRowClick?.(evt);
+                                          }
                                         }}
                                         disabled={detail.loading}
                                         className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium text-gray-700 hover:text-blue-600 hover:bg-blue-50 transition border border-gray-200 cursor-pointer disabled:opacity-50"
@@ -557,7 +566,7 @@ export const WebhookTable: React.FC<WebhookTableProps> = ({
       {/* Table Footer */}
       <div className="py-2.5 px-4 bg-gray-50 border-t border-gray-200 text-xs text-gray-500 flex flex-wrap justify-between items-center gap-2">
         <span>Total: {events.length} events recorded</span>
-        <span>Expanded: {expandedIds.size} of {events.length} rows</span>
+        <span>Expanded: {expandedId ? 1 : 0} of {events.length} rows</span>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { WebhookEvent, WebhookStatus, WebhookEventType, WebhookStats, RetryAttempt, EventDetailState } from '../types/webhook';
 import { WebhookTable } from '../components/WebhookTable';
 import { StatusCounts } from '../components/StatusCounts';
@@ -12,11 +12,23 @@ export default function WebhookProcessorDashboard() {
   const [events, setEvents] = useState<WebhookEvent[]>([]);
   const [stats, setStats] = useState<WebhookStats | null>(null);
   const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedDetails, setExpandedDetails] = useState<Record<string, EventDetailState>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  const expandedIdRef = useRef<string | null>(null);
+  const eventsRef = useRef<WebhookEvent[]>(events);
+
+  useEffect(() => {
+    expandedIdRef.current = expandedId;
+  }, [expandedId]);
+
+  useEffect(() => {
+    eventsRef.current = events;
+  }, [events]);
 
   // Fetch real events from the backend server
   const fetchEvents = useCallback(async () => {
@@ -112,19 +124,206 @@ export default function WebhookProcessorDashboard() {
     }
   }, []);
 
-  // Simple periodic polling to refresh events and statistics every 2.5 seconds
+  // Fetch event details (GET /events/:id) and attempt history (GET /events/:id/attempts)
+  const fetchEventDetail = useCallback(
+    async (id: string, eventId?: string, isPolling = false) => {
+      const targetId = eventId || id;
+      if (!targetId) return;
+
+      if (!isPolling) {
+        setExpandedDetails((prev) => ({
+          ...prev,
+          [id]: {
+            loading: true,
+            event: prev[id]?.event || null,
+            attempts: prev[id]?.attempts || null,
+            error: null,
+          },
+        }));
+      }
+
+      try {
+        // Parallel API calls:
+        // 1. GET /events/:id (get event data)
+        // 2. GET /events/:id/attempts (attempt history)
+        const [eventRes, attemptsRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/events/${encodeURIComponent(targetId)}`),
+          fetch(`${API_BASE_URL}/events/${encodeURIComponent(targetId)}/attempts`),
+        ]);
+
+        if (!eventRes.ok) {
+          throw new Error(
+            `GET /events/${targetId} failed with HTTP ${eventRes.status} (${eventRes.statusText})`,
+          );
+        }
+        if (!attemptsRes.ok) {
+          throw new Error(
+            `GET /events/${targetId}/attempts failed with HTTP ${attemptsRes.status} (${attemptsRes.statusText})`,
+          );
+        }
+
+        const eventData: WebhookEvent = await eventRes.json();
+        const attemptsJson = await attemptsRes.json();
+        const rawAttempts: RetryAttempt[] = Array.isArray(attemptsJson)
+          ? attemptsJson
+          : (attemptsJson as { data?: RetryAttempt[]; attempts?: RetryAttempt[] })?.data ||
+            (attemptsJson as { data?: RetryAttempt[]; attempts?: RetryAttempt[] })?.attempts ||
+            [];
+
+        // Map attempts from GET /events/:id/attempts
+        const attempts: RetryAttempt[] = rawAttempts.map((att) => {
+          const started = att.startedAt || att.timestamp;
+          const finished = att.finishedAt;
+          const duration =
+            att.durationMs ??
+            (started && finished
+              ? new Date(finished).getTime() - new Date(started).getTime()
+              : undefined);
+
+          return {
+            id: att.id,
+            attemptNumber: att.attemptNumber,
+            retryCycle: att.retryCycle,
+            workerId: att.workerId,
+            startedAt: att.startedAt,
+            finishedAt: att.finishedAt,
+            timestamp: started,
+            statusCode:
+              att.statusCode ??
+              (att.result === 'success'
+                ? 200
+                : att.result === 'failure'
+                  ? 500
+                  : undefined),
+            durationMs: duration,
+            errorMessage: att.error || att.errorMessage,
+            error: att.error || att.errorMessage,
+            result: att.result,
+            status:
+              att.result === 'success'
+                ? 'success'
+                : att.result === 'failure'
+                  ? 'failed'
+                  : 'processing',
+            responseBody: att.responseBody,
+          };
+        });
+
+        // Save strictly from both APIs into expandedDetails
+        setExpandedDetails((prev) => ({
+          ...prev,
+          [id]: {
+            loading: false,
+            event: eventData,
+            attempts,
+            error: null,
+          },
+        }));
+
+        // Keep events table row summary in sync with fresh state
+        setEvents((prevEvents) =>
+          prevEvents.map((evt) => {
+            if (evt.id !== id && evt.eventId !== targetId) {
+              return evt;
+            }
+
+            return {
+              ...evt,
+              status: eventData.status || evt.status,
+              totalAttempts:
+                attempts.length > 0
+                  ? attempts.length
+                  : eventData.totalAttempts ?? evt.totalAttempts,
+              lastError: eventData.lastError ?? evt.lastError,
+              lastErrorMessage: eventData.lastError ?? evt.lastErrorMessage,
+            };
+          }),
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to fetch event details';
+        setExpandedDetails((prev) => {
+          const current = prev[id];
+          if (isPolling && current?.event) {
+            // Keep existing data on background polling error
+            return prev;
+          }
+          return {
+            ...prev,
+            [id]: {
+              loading: false,
+              event: current?.event || null,
+              attempts: current?.attempts || null,
+              error: msg,
+            },
+          };
+        });
+      }
+    },
+    [],
+  );
+
+  // Toggle row expansion (single row open at a time)
+  const handleToggleRow = useCallback(
+    (evt: WebhookEvent) => {
+      setExpandedId((prev) => {
+        if (prev === evt.id) {
+          return null;
+        }
+        fetchEventDetail(evt.id, evt.eventId, false);
+        return evt.id;
+      });
+    },
+    [fetchEventDetail],
+  );
+
+  // Explicit manual refresh for opened row APIs
+  const handleRefreshDetail = useCallback(
+    (evt: WebhookEvent) => {
+      fetchEventDetail(evt.id, evt.eventId, false);
+    },
+    [fetchEventDetail],
+  );
+
+  // Periodic polling: refreshes events, stats, and if a row is opened, also polls its APIs:
+  // - GET /events
+  // - GET /stats
+  // - GET /events/:id
+  // - GET /events/:id/attempts
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchEvents();
-    fetchStats();
+    let isMounted = true;
+
+    const pollAll = async () => {
+      try {
+        const promises: Promise<unknown>[] = [fetchEvents(), fetchStats()];
+
+        const currentExpandedId = expandedIdRef.current;
+        if (currentExpandedId) {
+          const currentEvent = eventsRef.current.find(
+            (e) => e.id === currentExpandedId || e.eventId === currentExpandedId,
+          );
+          const targetId = currentEvent?.eventId || currentExpandedId;
+          promises.push(fetchEventDetail(currentExpandedId, targetId, true));
+        }
+
+        await Promise.allSettled(promises);
+      } catch (err) {
+        console.error('Polling error:', err);
+      }
+    };
+
+    pollAll();
 
     const interval = setInterval(() => {
-      fetchEvents();
-      fetchStats();
+      if (isMounted) {
+        pollAll();
+      }
     }, 2500);
 
-    return () => clearInterval(interval);
-  }, [fetchEvents, fetchStats]);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [fetchEvents, fetchStats, fetchEventDetail]);
 
   // Handle Retry Trigger
   const handleRetry = async (eventId: string) => {
@@ -142,8 +341,14 @@ export default function WebhookProcessorDashboard() {
         throw new Error(`Failed to retry event: ${res.statusText}`);
       }
 
-      // Refetch updated events and stats from backend
-      await Promise.all([fetchEvents(), fetchStats()]);
+      // Refetch updated events, stats, and opened row details
+      const promises: Promise<unknown>[] = [fetchEvents(), fetchStats()];
+      if (expandedIdRef.current) {
+        const curId = expandedIdRef.current;
+        const curEvent = eventsRef.current.find((e) => e.id === curId || e.eventId === curId);
+        promises.push(fetchEventDetail(curId, curEvent?.eventId || curId, false));
+      }
+      await Promise.allSettled(promises);
     } catch (err) {
       console.error('Failed to trigger retry:', err);
     } finally {
@@ -154,129 +359,6 @@ export default function WebhookProcessorDashboard() {
       });
     }
   };
-
-  // Handle Row Click: fetch event data (GET /events/:id) and attempt history (GET /events/:id/attempts)
-  const handleRowClick = useCallback(async (event: WebhookEvent) => {
-    const targetId = event.id || event.eventId;
-    if (!targetId) return;
-
-    setExpandedDetails((prev) => ({
-      ...prev,
-      [event.id]: {
-        loading: true,
-        event: prev[event.id]?.event || null,
-        attempts: prev[event.id]?.attempts || null,
-        error: null,
-      },
-    }));
-
-    try {
-      // Parallel API calls:
-      // 1. GET /events/:id (get event data)
-      // 2. GET /events/:id/attempts (attempt history)
-      const [eventRes, attemptsRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/events/${encodeURIComponent(targetId)}`),
-        fetch(`${API_BASE_URL}/events/${encodeURIComponent(targetId)}/attempts`),
-      ]);
-
-      if (!eventRes.ok) {
-        throw new Error(`GET /events/${targetId} failed with HTTP ${eventRes.status} (${eventRes.statusText})`);
-      }
-      if (!attemptsRes.ok) {
-        throw new Error(`GET /events/${targetId}/attempts failed with HTTP ${attemptsRes.status} (${attemptsRes.statusText})`);
-      }
-
-      const eventData: WebhookEvent = await eventRes.json();
-      const attemptsJson = await attemptsRes.json();
-      const rawAttempts: RetryAttempt[] = Array.isArray(attemptsJson)
-        ? attemptsJson
-        : (attemptsJson as { data?: RetryAttempt[]; attempts?: RetryAttempt[] })?.data ||
-          (attemptsJson as { data?: RetryAttempt[]; attempts?: RetryAttempt[] })?.attempts ||
-          [];
-
-      // Map attempts from GET /events/:id/attempts (already deduplicated by the backend API)
-      const attempts: RetryAttempt[] = rawAttempts.map((att) => {
-        const started = att.startedAt || att.timestamp;
-        const finished = att.finishedAt;
-        const duration =
-          att.durationMs ??
-          (started && finished
-            ? new Date(finished).getTime() - new Date(started).getTime()
-            : undefined);
-
-        return {
-          id: att.id,
-          attemptNumber: att.attemptNumber,
-          retryCycle: att.retryCycle,
-          workerId: att.workerId,
-          startedAt: att.startedAt,
-          finishedAt: att.finishedAt,
-          timestamp: started,
-          statusCode:
-            att.statusCode ??
-            (att.result === 'success'
-              ? 200
-              : att.result === 'failure'
-                ? 500
-                : undefined),
-          durationMs: duration,
-          errorMessage: att.error || att.errorMessage,
-          error: att.error || att.errorMessage,
-          result: att.result,
-          status:
-            att.result === 'success'
-              ? 'success'
-              : att.result === 'failure'
-                ? 'failed'
-                : 'processing',
-          responseBody: att.responseBody,
-        };
-      });
-
-      // Save strictly from both APIs into expandedDetails
-      setExpandedDetails((prev) => ({
-        ...prev,
-        [event.id]: {
-          loading: false,
-          event: eventData,
-          attempts,
-          error: null,
-        },
-      }));
-
-      // Update table row summary with fresh state
-      setEvents((prevEvents) =>
-        prevEvents.map((evt) => {
-          if (evt.id !== event.id && evt.eventId !== targetId) {
-            return evt;
-          }
-
-          return {
-            ...evt,
-            status: eventData.status || evt.status,
-            totalAttempts:
-              attempts.length > 0
-                ? attempts.length
-                : eventData.totalAttempts ?? evt.totalAttempts,
-            lastError: eventData.lastError ?? evt.lastError,
-            lastErrorMessage: eventData.lastError ?? evt.lastErrorMessage,
-          };
-        }),
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to fetch event details';
-      console.error(msg, err);
-      setExpandedDetails((prev) => ({
-        ...prev,
-        [event.id]: {
-          loading: false,
-          event: prev[event.id]?.event || null,
-          attempts: prev[event.id]?.attempts || null,
-          error: msg,
-        },
-      }));
-    }
-  }, []);
 
   // Filter events based on status and search query
   const filteredEvents = events.filter((evt) => {
@@ -379,7 +461,9 @@ export default function WebhookProcessorDashboard() {
             events={filteredEvents}
             onRetry={handleRetry}
             retryingIds={retryingIds}
-            onRowClick={handleRowClick}
+            expandedId={expandedId}
+            onToggleRow={handleToggleRow}
+            onRefreshDetail={handleRefreshDetail}
             expandedDetails={expandedDetails}
           />
         )}
