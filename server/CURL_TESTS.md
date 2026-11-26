@@ -25,9 +25,7 @@ A comprehensive guide containing copy-pasteable **cURL** commands to test all AP
 | `GET` | `/health` | System & Database Health Check | `200 OK` / `503 Service Unavailable` |
 | `GET` | `/stats` | Aggregated Dashboard Statistics | `200 OK` |
 | `POST` | `/webhooks` | Ingest Webhook Event (Async queue) | `202 Accepted` / `400 Bad Request` |
-| `GET` | `/events` | List Events (with Filtering, Pagination & Sorting) | `200 OK` |
-| `GET` | `/events/:id` | Get Single Event by `eventId` or UUID | `200 OK` / `404 Not Found` |
-| `GET` | `/events/:id/attempts` | Get Processing Attempt History for Event | `200 OK` / `404 Not Found` |
+| `GET` | `/events` | List All Events with Payload & Attempt History (Filtering, Pagination & Sorting) | `200 OK` |
 | `POST` | `/events/:id/retry` | Manually Retry a Failed Event | `200 OK` / `400 Bad Request` / `404 Not Found` |
 
 ---
@@ -521,148 +519,7 @@ curl -i -X GET "http://localhost:3001/events?page=1&limit=5&status=completed&typ
 
 ---
 
-## 4. Single Event Details API (`GET /events/:id`)
-
-Retrieve a single event including its full payload, `processedOrder` relation, and complete `processingAttempts` history.
-
-### 4.1 Lookup by Business `eventId`
-```bash
-curl -i -X GET http://localhost:3001/events/evt_order_1001
-```
-
-**Expected Response (200 OK):**
-```json
-{
-  "id": "3b4f61f5-b3df-4993-9c8e-324df782bf6d",
-  "eventId": "evt_order_1001",
-  "eventType": "order.created",
-  "status": "completed",
-  "payload": {
-    "orderId": "ORD-1001",
-    "customerId": "CUS-42",
-    "amount": 199.99,
-    "currency": "USD"
-  },
-  "totalAttempts": 1,
-  "cycleAttempts": 1,
-  "maxAttempts": 5,
-  "leaseOwner": null,
-  "leaseToken": null,
-  "leaseExpiresAt": null,
-  "nextAttemptAt": null,
-  "lastError": null,
-  "receivedAt": "2026-11-26T22:45:00.000Z",
-  "updatedAt": "2026-11-26T22:45:01.000Z",
-  "processingAttempts": [
-    {
-      "id": "a1b2c3d4-0000-0000-0000-000000000001",
-      "eventId": "3b4f61f5-b3df-4993-9c8e-324df782bf6d",
-      "attemptNumber": 1,
-      "retryCycle": 1,
-      "status": "success",
-      "error": null,
-      "durationMs": 42,
-      "workerId": "worker-1",
-      "startedAt": "2026-11-26T22:45:01.000Z",
-      "completedAt": "2026-11-26T22:45:01.042Z"
-    }
-  ],
-  "processedOrder": {
-    "id": "e8a1d2c3-1111-2222-3333-444455556666",
-    "orderId": "ORD-1001",
-    "customerId": "CUS-42",
-    "status": "processed",
-    "createdAt": "2026-11-26T22:45:01.042Z"
-  }
-}
-```
-
----
-
-### 4.2 Lookup by Database UUID
-```bash
-curl -i -X GET http://localhost:3001/events/3b4f61f5-b3df-4993-9c8e-324df782bf6d
-```
-
----
-
-### 4.3 Non-Existent Event Lookup (404 Not Found)
-```bash
-curl -i -X GET http://localhost:3001/events/evt_non_existent_id
-```
-
-**Expected Response (404 Not Found):**
-```json
-{
-  "message": "Event with ID 'evt_non_existent_id' not found",
-  "error": "Not Found",
-  "statusCode": 404
-}
-```
-
----
-
-## 5. Event Attempts History API (`GET /events/:id/attempts`)
-
-Retrieve only the processing attempt records for an event (including worker ID, attempt numbers, execution durations, and error details).
-
-### 5.1 Fetch Attempts by `eventId`
-```bash
-curl -i -X GET http://localhost:3001/events/evt_sim_retry_5001/attempts
-```
-
-**Expected Response (200 OK):**
-```json
-[
-  {
-    "id": "8f2e1a3b-1111-4444-8888-abcdef123456",
-    "eventId": "3b4f61f5-b3df-4993-9c8e-324df782bf6d",
-    "attemptNumber": 1,
-    "retryCycle": 1,
-    "status": "failure",
-    "error": "Simulated transient failure (attempt 1/2) for event evt_sim_retry_5001",
-    "durationMs": 15,
-    "workerId": "worker-1",
-    "startedAt": "2026-11-26T22:45:01.000Z",
-    "completedAt": "2026-11-26T22:45:01.015Z"
-  },
-  {
-    "id": "9c3d2e4f-2222-5555-9999-bcdef1234567",
-    "eventId": "3b4f61f5-b3df-4993-9c8e-324df782bf6d",
-    "attemptNumber": 2,
-    "retryCycle": 1,
-    "status": "failure",
-    "error": "Simulated transient failure (attempt 2/2) for event evt_sim_retry_5001",
-    "durationMs": 12,
-    "workerId": "worker-2",
-    "startedAt": "2026-11-26T22:45:03.000Z",
-    "completedAt": "2026-11-26T22:45:03.012Z"
-  },
-  {
-    "id": "ad4e3f5a-3333-6666-aaaa-cdef12345678",
-    "eventId": "3b4f61f5-b3df-4993-9c8e-324df782bf6d",
-    "attemptNumber": 3,
-    "retryCycle": 1,
-    "status": "success",
-    "error": null,
-    "durationMs": 35,
-    "workerId": "worker-1",
-    "startedAt": "2026-11-26T22:45:07.000Z",
-    "completedAt": "2026-11-26T22:45:07.035Z"
-  }
-]
-```
-
----
-
-### 5.2 Non-Existent Event Attempts (404 Not Found)
-```bash
-curl -i -X GET http://localhost:3001/events/non_existent_event/attempts
-```
-
----
-
-## 6. Manual Event Retry API (`POST /events/:id/retry`)
+## 4. Manual Event Retry API (`POST /events/:id/retry`)
 
 Allows manual intervention to reset a permanently failed event back to `pending`, resetting cycle counters and clearing the lease so workers can pick it up immediately.
 
@@ -758,32 +615,22 @@ curl.exe -i -X POST http://localhost:3001/webhooks -H "Content-Type: application
 curl.exe -i -X POST http://localhost:3001/webhooks -H "Content-Type: application/json" -d "{\"eventId\":\"evt_cmd_101\",\"type\":\"order.created\",\"data\":{\"orderId\":\"ORD-CMD-101\",\"customerId\":\"CUS-1\"}}"
 ```
 
-### 7.8 Fetch Attempt History (CMD format):
-```cmd
-curl.exe -i -X GET http://localhost:3001/events/evt_cmd_sim_retry/attempts
-```
-
-### 7.9 Retry Permanently Failed Event (CMD format):
+### 7.8 Retry Permanently Failed Event (CMD format):
 ```cmd
 curl.exe -i -X POST http://localhost:3001/events/evt_cmd_sim_fail/retry
 ```
 
-### 7.10 Single Event Details (CMD format):
-```cmd
-curl.exe -i -X GET http://localhost:3001/events/evt_cmd_101
-```
-
-### 7.11 Health Check (CMD format):
+### 7.9 Health Check (CMD format):
 ```cmd
 curl.exe -i -X GET http://localhost:3001/health
 ```
 
-### 7.12 Dashboard Stats (CMD format):
+### 7.10 Dashboard Stats (CMD format):
 ```cmd
 curl.exe -i -X GET http://localhost:3001/stats
 ```
 
-### 7.13 List Events with Filters (CMD format):
+### 7.11 List Events with Filters (CMD format):
 ```cmd
 curl.exe -i -X GET "http://localhost:3001/events?status=completed&limit=5"
 ```

@@ -12,21 +12,11 @@ import { EventsService } from './events.service';
 
 @Controller('events')
 export class EventsController {
-  constructor(private readonly eventsService: EventsService) {}
+  constructor(private readonly eventsService: EventsService) { }
 
   @Get()
   async findAll(@Query() query: GetEventsQueryDto) {
     return this.eventsService.findAll(query);
-  }
-
-  @Get(':id/attempts')
-  async findAttempts(@Param('id') id: string) {
-    return this.eventsService.findAttempts(id);
-  }
-
-  @Get(':id')
-  async findOne(@Param('id') id: string) {
-    return this.eventsService.findOne(id);
   }
 
   @Post(':id/retry')

@@ -51,8 +51,8 @@ server/
 │   │   ├── dto/
 │   │   │   ├── get-events-query.dto.ts # Query params validation (status, type, orderId, pagination, sorting)
 │   │   │   └── index.ts
-│   │   ├── events.controller.ts     # GET /events & GET /events/:id handlers
-│   │   ├── events.service.ts        # Event filtering, pagination & single event lookup
+│   │   ├── events.controller.ts     # GET /events & POST /events/:id/retry handlers
+│   │   ├── events.service.ts        # Event filtering, pagination & retry logic
 │   │   ├── events.module.ts         # Events feature module
 │   │   ├── events.controller.spec.ts # Controller unit tests
 │   │   └── events.service.spec.ts   # Service unit tests
