@@ -47,6 +47,15 @@ server/
 │   │   ├── webhooks.module.ts       # Webhooks feature module
 │   │   ├── webhooks.controller.spec.ts # Controller unit tests
 │   │   └── webhooks.service.spec.ts    # Service unit tests
+│   ├── events/
+│   │   ├── dto/
+│   │   │   ├── get-events-query.dto.ts # Query params validation (status, type, orderId, pagination, sorting)
+│   │   │   └── index.ts
+│   │   ├── events.controller.ts     # GET /events & GET /events/:id handlers
+│   │   ├── events.service.ts        # Event filtering, pagination & single event lookup
+│   │   ├── events.module.ts         # Events feature module
+│   │   ├── events.controller.spec.ts # Controller unit tests
+│   │   └── events.service.spec.ts   # Service unit tests
 │   ├── app.controller.ts            # Root health check controller
 │   ├── app.service.ts               # Root service
 │   ├── app.module.ts                # Root application module
@@ -280,3 +289,107 @@ HTTP/1.1 400 Bad Request
   "statusCode": 400
 }
 ```
+
+---
+
+## Events API Testing Commands
+
+The `GET /events` API retrieves ingested webhook events with comprehensive filtering and pagination support.
+
+### Supported Query Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `page` | Integer | `1` | Page number (1-based, min: 1) |
+| `limit` | Integer | `10` | Records per page (min: 1, max: 100) |
+| `status` | String | - | Filter by status (`pending`, `processing`, `completed`, `failed`) |
+| `type` / `eventType` | String | - | Filter by event type (`order.created`, `order.updated`, etc.) |
+| `orderId` | String | - | Filter by order ID in event payload or processed orders |
+| `customerId` | String | - | Filter by customer ID in event payload |
+| `search` | String | - | Keyword search matching `eventId`, `eventType`, or `lastError` |
+| `startDate` / `from` | ISO Date | - | Filter events received after this timestamp |
+| `endDate` / `to` | ISO Date | - | Filter events received before this timestamp |
+| `sortBy` | String | `receivedAt` | Sort field (`receivedAt`, `updatedAt`, `status`, `eventType`, `totalAttempts`, `eventId`) |
+| `sortOrder` | String | `desc` | Sort direction (`asc` or `desc`) |
+
+---
+
+### 1. List Events with Default Pagination
+
+**cURL:**
+```bash
+curl -i -X GET http://localhost:3001/events
+```
+
+**PowerShell:**
+```powershell
+Invoke-RestMethod -Uri "http://localhost:3001/events" -Method Get
+```
+
+**Expected Response (200 OK):**
+```json
+{
+  "data": [
+    {
+      "id": "e3b0c442-98fc-1c14-9afb-4c7b8e1f0001",
+      "eventId": "evt_123",
+      "eventType": "order.created",
+      "payload": {
+        "orderId": "ORD-1001",
+        "customerId": "CUS-42",
+        "simulate": "fail_then_succeed:2"
+      },
+      "status": "pending",
+      "totalAttempts": 0,
+      "cycleAttempts": 0,
+      "maxAttempts": 5,
+      "nextAttemptAt": null,
+      "leaseOwner": null,
+      "leaseToken": null,
+      "leaseExpiresAt": null,
+      "lastError": null,
+      "receivedAt": "2026-11-26T13:00:00.000Z",
+      "updatedAt": "2026-11-26T13:00:00.000Z",
+      "processingAttempts": [],
+      "processedOrder": null
+    }
+  ],
+  "pagination": {
+    "total": 1,
+    "page": 1,
+    "limit": 10,
+    "totalPages": 1,
+    "hasNextPage": false,
+    "hasPreviousPage": false
+  }
+}
+```
+
+---
+
+### 2. List Events with Filters & Pagination
+
+**cURL:**
+```bash
+curl -i -X GET "http://localhost:3001/events?page=1&limit=5&status=completed&type=order.created&orderId=ORD-1001"
+```
+
+**PowerShell:**
+```powershell
+Invoke-RestMethod -Uri "http://localhost:3001/events?page=1&limit=5&status=completed&type=order.created&orderId=ORD-1001" -Method Get
+```
+
+---
+
+### 3. Get Single Event by ID
+
+**cURL:**
+```bash
+curl -i -X GET http://localhost:3001/events/evt_123
+```
+
+**PowerShell:**
+```powershell
+Invoke-RestMethod -Uri "http://localhost:3001/events/evt_123" -Method Get
+```
+
