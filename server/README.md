@@ -299,13 +299,56 @@ Two concurrent background workers poll and process webhook events from PostgreSQ
    - Failed events are retried with exponential backoff delay up to `max_attempts`.
    - Each attempt is recorded in the `processing_attempts` table.
 
-### Running Workers Standalone
+### Running Workers Separately with CMD
 
-Workers can also run in a dedicated process outside the HTTP web server:
+Worker 1 and Worker 2 code have been separated into dedicated services (`worker-1.service.ts` and `worker-2.service.ts`) and standalone entry runners (`worker-1-runner.ts` and `worker-2-runner.ts`).
+
+You can start each worker independently in its own CMD / terminal window:
+
+#### Option 1: Using Windows CMD Scripts (Double-click or CMD)
+
+**Worker 1 Window:**
+```cmd
+start-worker-1.cmd
+```
+
+**Worker 2 Window:**
+```cmd
+start-worker-2.cmd
+```
+
+#### Option 2: Using npm Scripts in CMD
+
+**Terminal 1 (Worker 1):**
+```bash
+npm run worker:1
+```
+
+**Terminal 2 (Worker 2):**
+```bash
+npm run worker:2
+```
+
+#### Option 3: Production (compiled JavaScript)
+
+```bash
+# Build first
+npm run build
+
+# Terminal 1:
+npm run worker:1:prod
+
+# Terminal 2:
+npm run worker:2:prod
+```
+
+#### Option 4: Run Both Workers Concurrently in a Single Process
 
 ```bash
 npm run worker
+# or: npm run worker:all
 ```
+
 
 
 

@@ -5,8 +5,10 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../src/prisma';
 import {
   WorkersService,
+  Worker1Service,
+  Worker2Service,
   ClaimedWebhookEvent,
-} from '../src/workers/workers.service';
+} from '../src/workers';
 
 describe('WorkersService', () => {
   let service: WorkersService;
@@ -42,6 +44,8 @@ describe('WorkersService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         WorkersService,
+        Worker1Service,
+        Worker2Service,
         {
           provide: PrismaService,
           useValue: mockPrismaService,
