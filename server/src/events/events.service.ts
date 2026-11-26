@@ -3,6 +3,16 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma';
 import { GetEventsQueryDto } from './dto';
 
+export interface DashboardStatsResponse {
+  total: number;
+  pending: number;
+  processing: number;
+  completed: number;
+  failed: number;
+  permanentlyFailed: number;
+  completelyFailed: number;
+}
+
 @Injectable()
 export class EventsService {
   private readonly logger = new Logger(EventsService.name);
@@ -162,5 +172,39 @@ export class EventsService {
     }
 
     return event;
+  }
+
+  async getStats(): Promise<DashboardStatsResponse> {
+    const [total, pending, processing, completed, failed] = await Promise.all([
+      this.prisma.webhookEvent.count(),
+      this.prisma.webhookEvent.count({
+        where: { status: { equals: 'pending', mode: 'insensitive' } },
+      }),
+      this.prisma.webhookEvent.count({
+        where: { status: { equals: 'processing', mode: 'insensitive' } },
+      }),
+      this.prisma.webhookEvent.count({
+        where: { status: { equals: 'completed', mode: 'insensitive' } },
+      }),
+      this.prisma.webhookEvent.count({
+        where: {
+          OR: [
+            { status: { equals: 'failed', mode: 'insensitive' } },
+            { status: { equals: 'permanently failed', mode: 'insensitive' } },
+            { status: { contains: 'fail', mode: 'insensitive' } },
+          ],
+        },
+      }),
+    ]);
+
+    return {
+      total,
+      pending,
+      processing,
+      completed,
+      failed,
+      permanentlyFailed: failed,
+      completelyFailed: failed,
+    };
   }
 }

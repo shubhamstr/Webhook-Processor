@@ -2,8 +2,8 @@
 import { jest } from '@jest/globals';
 import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { PrismaService } from '../prisma';
-import { EventsService } from './events.service';
+import { PrismaService } from '../src/prisma';
+import { EventsService } from '../src/events/events.service';
 
 describe('EventsService', () => {
   let service: EventsService;
@@ -232,6 +232,29 @@ describe('EventsService', () => {
       await expect(service.findOne('evt_non_existent')).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  describe('getStats', () => {
+    it('should return aggregated counts for events', async () => {
+      mockPrismaService.webhookEvent.count
+        .mockResolvedValueOnce(50) // total
+        .mockResolvedValueOnce(15) // pending
+        .mockResolvedValueOnce(5)  // processing
+        .mockResolvedValueOnce(25) // completed
+        .mockResolvedValueOnce(5);  // failed
+
+      const result = await service.getStats();
+
+      expect(result).toEqual({
+        total: 50,
+        pending: 15,
+        processing: 5,
+        completed: 25,
+        failed: 5,
+        permanentlyFailed: 5,
+        completelyFailed: 5,
+      });
     });
   });
 });

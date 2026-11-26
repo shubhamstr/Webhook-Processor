@@ -39,6 +39,19 @@ describe('AppController (e2e)', () => {
     expect(typeof response.body.database.latencyMs).toBe('number');
   });
 
+  it('/stats (GET)', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/stats')
+      .expect(200);
+
+    expect(typeof response.body.total).toBe('number');
+    expect(typeof response.body.pending).toBe('number');
+    expect(typeof response.body.processing).toBe('number');
+    expect(typeof response.body.completed).toBe('number');
+    expect(typeof response.body.failed).toBe('number');
+    expect(typeof response.body.permanentlyFailed).toBe('number');
+  });
+
   afterEach(async () => {
     await app.close();
   });

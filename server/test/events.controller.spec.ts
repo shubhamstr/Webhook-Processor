@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { jest } from '@jest/globals';
 import { Test, TestingModule } from '@nestjs/testing';
-import { GetEventsQueryDto } from './dto';
-import { EventsController } from './events.controller';
-import { EventsService } from './events.service';
+import { GetEventsQueryDto } from '../src/events/dto';
+import { EventsController } from '../src/events/events.controller';
+import { EventsService } from '../src/events/events.service';
 
 describe('EventsController', () => {
   let controller: EventsController;

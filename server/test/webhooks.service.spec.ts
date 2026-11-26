@@ -2,9 +2,9 @@
 import { jest } from '@jest/globals';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Prisma } from '@prisma/client';
-import { PrismaService } from '../prisma';
-import { WebhooksService } from './webhooks.service';
-import { CreateWebhookDto } from './dto';
+import { PrismaService } from '../src/prisma';
+import { WebhooksService } from '../src/webhooks/webhooks.service';
+import { CreateWebhookDto } from '../src/webhooks/dto';
 
 describe('WebhooksService', () => {
   let service: WebhooksService;

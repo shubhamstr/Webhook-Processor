@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { jest } from '@jest/globals';
 import { Test, TestingModule } from '@nestjs/testing';
-import { WebhooksController } from './webhooks.controller';
-import { WebhooksService } from './webhooks.service';
-import { CreateWebhookDto } from './dto';
+import { WebhooksController } from '../src/webhooks/webhooks.controller';
+import { WebhooksService } from '../src/webhooks/webhooks.service';
+import { CreateWebhookDto } from '../src/webhooks/dto';
 
 describe('WebhooksController', () => {
   let controller: WebhooksController;

@@ -1,10 +1,14 @@
 import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { AppService, HealthCheckResponse } from './app.service';
+import { DashboardStatsResponse, EventsService } from './events/events.service';
 
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
+  constructor(
+    private readonly appService: AppService,
+    private readonly eventsService: EventsService,
+  ) {}
 
   @Get()
   getHello(): string {
@@ -20,5 +24,10 @@ export class AppController {
       res.status(HttpStatus.SERVICE_UNAVAILABLE);
     }
     return health;
+  }
+
+  @Get('stats')
+  async getStats(): Promise<DashboardStatsResponse> {
+    return this.eventsService.getStats();
   }
 }
