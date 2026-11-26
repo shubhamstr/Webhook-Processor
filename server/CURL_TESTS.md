@@ -634,3 +634,61 @@ curl.exe -i -X GET http://localhost:3001/stats
 ```cmd
 curl.exe -i -X GET "http://localhost:3001/events?status=completed&limit=5"
 ```
+
+---
+
+## 8. 500-Event Burst Load & Terminal State Verification (CMD)
+
+Run a 500-event burst test to verify the system remains responsive under heavy ingestion load and every event reaches a terminal state (`completed` or `failed`).
+
+### 8.1 Method A: Automated Node.js Burst Script in CMD (Recommended)
+```cmd
+cd server
+npm run test:burst
+```
+With simulated failures to verify both `completed` and `failed` terminal states:
+```cmd
+node scripts/burst-test.js 500 --include-failures
+```
+
+### 8.2 Method B: Windows CMD Loop with `curl.exe`
+Submits 500 events in a fast loop directly from CMD:
+```cmd
+for /L %i in (1,1,500) do @curl.exe -s -o NUL -w "%{http_code} " -X POST http://localhost:3001/webhooks -H "Content-Type: application/json" -d "{\"eventId\":\"evt_cmd_burst_%i\",\"type\":\"order.created\",\"data\":{\"orderId\":\"ORD-CMD-BURST-%i\",\"customerId\":\"CUS-%i\",\"amount\":99.99}}"
+```
+
+### 8.3 Verify System Responsiveness During Spike Load
+Check latency and database health during the burst:
+```cmd
+curl.exe -i -X GET http://localhost:3001/health
+```
+
+### 8.4 Monitor Terminal State Progression in CMD
+Poll until `pending: 0` and `processing: 0`:
+```cmd
+:loop
+curl.exe -s http://localhost:3001/stats
+timeout /t 2 >nul
+goto loop
+```
+
+**Expected Response when all events reach a terminal state (`pending` and `processing` become 0):**
+```json
+{
+  "total": 505,
+  "pending": 0,
+  "processing": 0,
+  "completed": 484,
+  "failed": 21,
+  "permanentlyFailed": 21,
+  "completelyFailed": 21
+}
+```
+
+### 8.5 Inspect Terminal Events in CMD
+Inspect completed and failed events to verify full lifecycle history:
+```cmd
+curl.exe -s "http://localhost:3001/events?status=completed&limit=5"
+curl.exe -s "http://localhost:3001/events?status=failed&limit=5"
+```
+

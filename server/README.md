@@ -169,6 +169,15 @@ All cURL commands and testing examples across every endpoint (Health Check, Dash
 
 👉 **[CURL_TESTS.md](./CURL_TESTS.md)**
 
+### 500-Event Burst Load & Terminal State Verification
+To submit 500 events concurrently and verify system responsiveness & terminal state drainage:
+```bash
+# In Windows CMD:
+npm run test:burst
+```
+See section 8 of [CURL_TESTS.md](./CURL_TESTS.md) for curl loop commands and detailed verification.
+
+
 ---
 
 ## PostgreSQL-Backed Workers
@@ -197,19 +206,7 @@ Worker 1 and Worker 2 code have been separated into dedicated services (`worker-
 
 You can start each worker independently in its own CMD / terminal window:
 
-#### Option 1: Using Windows CMD Scripts (Double-click or CMD)
-
-**Worker 1 Window:**
-```cmd
-start-worker-1.cmd
-```
-
-**Worker 2 Window:**
-```cmd
-start-worker-2.cmd
-```
-
-#### Option 2: Using npm Scripts in CMD
+#### Using npm Scripts in CMD
 
 **Terminal 1 (Worker 1):**
 ```bash
@@ -221,7 +218,7 @@ npm run worker:1
 npm run worker:2
 ```
 
-#### Option 3: Production (compiled JavaScript)
+#### Production (compiled JavaScript)
 
 ```bash
 # Build first
