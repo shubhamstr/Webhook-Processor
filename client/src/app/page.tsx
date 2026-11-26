@@ -99,22 +99,19 @@ export default function WebhookProcessorDashboard() {
 
   // Handle Retry Trigger
   const handleRetry = async (eventId: string) => {
-    const targetEvent = events.find((e) => e.id === eventId);
+    const targetEvent = events.find((e) => e.id === eventId || e.eventId === eventId);
     if (!targetEvent) return;
 
     setRetryingIds((prev) => new Set(prev).add(eventId));
 
     try {
-      // Re-submit event payload to the webhooks endpoint to trigger processing
-      await fetch(`${API_BASE_URL}/webhooks`, {
+      const targetId = targetEvent.id || targetEvent.eventId || eventId;
+      const res = await fetch(`${API_BASE_URL}/events/${encodeURIComponent(targetId)}/retry`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          eventId: targetEvent.eventId || targetEvent.id,
-          type: targetEvent.eventType || targetEvent.type || 'order.created',
-          data: targetEvent.payload,
-        }),
       });
+      if (!res.ok) {
+        throw new Error(`Failed to retry event: ${res.statusText}`);
+      }
 
       // Refetch updated events and stats from backend
       await Promise.all([fetchEvents(), fetchStats()]);

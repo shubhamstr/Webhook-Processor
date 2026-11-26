@@ -7,8 +7,6 @@ import {
   ChevronDown,
   ChevronRight,
   RotateCw,
-  Copy,
-  Check,
   AlertCircle,
   Clock,
   Server,
@@ -28,7 +26,6 @@ export const WebhookTable: React.FC<WebhookTableProps> = ({
   retryingIds,
 }) => {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const toggleRow = (id: string) => {
     setExpandedIds((prev) => {
@@ -48,13 +45,6 @@ export const WebhookTable: React.FC<WebhookTableProps> = ({
     } else {
       setExpandedIds(new Set(events.map((e) => e.id)));
     }
-  };
-
-  const copyPayload = (id: string, payload: unknown, e: React.MouseEvent) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 1800);
   };
 
   const formatDate = (isoString?: string | null) => {
@@ -276,31 +266,6 @@ export const WebhookTable: React.FC<WebhookTableProps> = ({
                                     {attemptCount} / {maxAttempts}
                                   </span>
                                 </div>
-                              </div>
-
-                              <div className="flex items-center gap-2">
-                                <button
-                                  onClick={(e) => copyPayload(evt.id, evt.payload, e)}
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded transition cursor-pointer"
-                                >
-                                  {copiedId === evt.id ? (
-                                    <Check className="w-3.5 h-3.5 text-emerald-600" />
-                                  ) : (
-                                    <Copy className="w-3.5 h-3.5" />
-                                  )}
-                                  <span>{copiedId === evt.id ? 'Copied' : 'Copy Payload'}</span>
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onRetry(evt.id);
-                                  }}
-                                  disabled={isRetrying}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded transition cursor-pointer"
-                                >
-                                  <RotateCw className={`w-3.5 h-3.5 ${isRetrying ? 'animate-spin' : ''}`} />
-                                  <span>{isRetrying ? 'Retrying...' : 'Retry Webhook'}</span>
-                                </button>
                               </div>
                             </div>
 
