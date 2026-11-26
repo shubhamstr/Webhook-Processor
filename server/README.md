@@ -159,16 +159,6 @@ npm run prisma:studio
 # or: npx prisma studio
 ```
 
-### Query Ingested Webhooks (SQL)
-
-```sql
-SELECT event_id, event_type, status, payload, received_at 
-FROM webhook_events 
-ORDER BY received_at DESC;
-```
-
----
-
 ## Webhook Testing Commands
 
 Test `POST /webhooks` manually using **cURL** or **PowerShell**:
@@ -190,28 +180,6 @@ curl -i -X POST http://localhost:3001/webhooks \
   }'
 ```
 
-**PowerShell:**
-```powershell
-Invoke-RestMethod -Uri "http://localhost:3001/webhooks" -Method Post -ContentType "application/json" -Body '{
-  "eventId": "evt_123",
-  "type": "order.created",
-  "data": {
-    "orderId": "ORD-1001",
-    "customerId": "CUS-42",
-    "simulate": "fail_then_succeed:2"
-  }
-}'
-```
-
-**Expected Response:**
-```json
-HTTP/1.1 202 Accepted
-{
-  "status": "accepted",
-  "eventId": "evt_123"
-}
-```
-
 ---
 
 ### 2. Duplicate Delivery with Different Payload (Idempotency - 202 Accepted)
@@ -226,31 +194,10 @@ curl -i -X POST http://localhost:3001/webhooks \
     "eventId": "evt_123",
     "type": "order.updated",
     "data": {
-      "orderId": "ORD-DIFFERENT",
-      "customerId": "CUS-DIFFERENT"
+      "orderId": "ORD-1002",
+      "customerId": "CUS-1002"
     }
   }'
-```
-
-**PowerShell:**
-```powershell
-Invoke-RestMethod -Uri "http://localhost:3001/webhooks" -Method Post -ContentType "application/json" -Body '{
-  "eventId": "evt_123",
-  "type": "order.updated",
-  "data": {
-    "orderId": "ORD-DIFFERENT",
-    "customerId": "CUS-DIFFERENT"
-  }
-}'
-```
-
-**Expected Response:**
-```json
-HTTP/1.1 202 Accepted
-{
-  "status": "accepted",
-  "eventId": "evt_123"
-}
 ```
 
 ---
@@ -269,31 +216,6 @@ curl -i -X POST http://localhost:3001/webhooks \
       "customerId": "CUS-42"
     }
   }'
-```
-
-**PowerShell:**
-```powershell
-Invoke-RestMethod -Uri "http://localhost:3001/webhooks" -Method Post -ContentType "application/json" -Body '{
-  "type": "order.created",
-  "data": {
-    "customerId": "CUS-42"
-  }
-}'
-```
-
-**Expected Response:**
-```json
-HTTP/1.1 400 Bad Request
-{
-  "message": [
-    "eventId must be a string",
-    "eventId should not be empty",
-    "data.orderId must be a string",
-    "data.orderId should not be empty"
-  ],
-  "error": "Bad Request",
-  "statusCode": 400
-}
 ```
 
 ---
@@ -327,62 +249,12 @@ The `GET /events` API retrieves ingested webhook events with comprehensive filte
 curl -i -X GET http://localhost:3001/events
 ```
 
-**PowerShell:**
-```powershell
-Invoke-RestMethod -Uri "http://localhost:3001/events" -Method Get
-```
-
-**Expected Response (200 OK):**
-```json
-{
-  "data": [
-    {
-      "id": "e3b0c442-98fc-1c14-9afb-4c7b8e1f0001",
-      "eventId": "evt_123",
-      "eventType": "order.created",
-      "payload": {
-        "orderId": "ORD-1001",
-        "customerId": "CUS-42",
-        "simulate": "fail_then_succeed:2"
-      },
-      "status": "pending",
-      "totalAttempts": 0,
-      "cycleAttempts": 0,
-      "maxAttempts": 5,
-      "nextAttemptAt": null,
-      "leaseOwner": null,
-      "leaseToken": null,
-      "leaseExpiresAt": null,
-      "lastError": null,
-      "receivedAt": "2026-11-26T13:00:00.000Z",
-      "updatedAt": "2026-11-26T13:00:00.000Z",
-      "processingAttempts": [],
-      "processedOrder": null
-    }
-  ],
-  "pagination": {
-    "total": 1,
-    "page": 1,
-    "limit": 10,
-    "totalPages": 1,
-    "hasNextPage": false,
-    "hasPreviousPage": false
-  }
-}
-```
-
----
 
 ### 2. List Events with Filters & Pagination
 
 **cURL:**
 ```bash
 curl -i -X GET "http://localhost:3001/events?page=1&limit=5&status=completed&type=order.created&orderId=ORD-1001"
-```
-
-**PowerShell:**
-```powershell
-Invoke-RestMethod -Uri "http://localhost:3001/events?page=1&limit=5&status=completed&type=order.created&orderId=ORD-1001" -Method Get
 ```
 
 ---
@@ -392,11 +264,6 @@ Invoke-RestMethod -Uri "http://localhost:3001/events?page=1&limit=5&status=compl
 **cURL:**
 ```bash
 curl -i -X GET http://localhost:3001/events/evt_123
-```
-
-**PowerShell:**
-```powershell
-Invoke-RestMethod -Uri "http://localhost:3001/events/evt_123" -Method Get
 ```
 
 ---
@@ -410,37 +277,6 @@ The `GET /health` endpoint performs a system and database connectivity health ch
 **cURL:**
 ```bash
 curl -i -X GET http://localhost:3001/health
-```
-
-**PowerShell:**
-```powershell
-Invoke-RestMethod -Uri "http://localhost:3001/health" -Method Get
-```
-
-**Expected Response (200 OK when healthy):**
-```json
-{
-  "status": "ok",
-  "timestamp": "2026-11-26T13:54:00.000Z",
-  "uptime": 12.34,
-  "database": {
-    "status": "up",
-    "latencyMs": 2
-  }
-}
-```
-
-**Expected Response (503 Service Unavailable when database unreachable):**
-```json
-{
-  "status": "error",
-  "timestamp": "2026-11-26T13:54:00.000Z",
-  "uptime": 12.34,
-  "database": {
-    "status": "down",
-    "error": "Database connection failed"
-  }
-}
 ```
 
 ---
@@ -462,15 +298,6 @@ Two concurrent background workers poll and process webhook events from PostgreSQ
 5. **Exponential Backoff & Retries**:
    - Failed events are retried with exponential backoff delay up to `max_attempts`.
    - Each attempt is recorded in the `processing_attempts` table.
-
-### Worker API Endpoints
-
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/workers/status` | View status and stats of both workers |
-| `POST` | `/workers/start` | Start worker execution loops |
-| `POST` | `/workers/stop` | Gracefully stop worker loops |
-| `POST` | `/workers/claim` | Manually trigger a claim for a given worker |
 
 ### Running Workers Standalone
 
