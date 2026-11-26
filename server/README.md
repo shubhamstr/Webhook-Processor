@@ -21,7 +21,7 @@ A high-performance, idempotent webhook ingestion and processing service built wi
 - **Prisma CLI & Prisma Studio:** Database migrations, introspection, and visual data management
 - **PostgreSQL:** Relational database with JSONB support
 - **Oxlint:** Fast Rust-based linter for TypeScript
-- **cURL / PowerShell:** API manual testing and simulation
+- **cURL / PowerShell:** API manual testing and simulation (see [CURL_TESTS.md](./CURL_TESTS.md))
 
 ---
 
@@ -73,6 +73,7 @@ server/
 │   ├── app.e2e-spec.ts              # Root e2e tests
 │   ├── webhooks.e2e-spec.ts         # Webhook ingestion e2e tests (202, deduplication, 400 validation)
 │   └── jest-e2e.json                # E2E Jest configuration
+├── CURL_TESTS.md                    # Comprehensive cURL commands for all API endpoints
 ├── .env.example                     # Environment variables template
 ├── .env                             # Local environment variables
 ├── package.json                     # Scripts and dependencies
@@ -162,125 +163,11 @@ npm run prisma:studio
 # or: npx prisma studio
 ```
 
-## Webhook Testing Commands
+## API Testing & cURL Commands
 
-Test `POST /webhooks` manually using **cURL** or **PowerShell**:
+All cURL commands and testing examples across every endpoint (Health Check, Dashboard Stats, Webhooks Ingestion, Simulations, Idempotency, Events Filtering, Pagination, Attempt History, and Manual Retries) have been organized into a dedicated testing reference:
 
-### 1. Ingest Valid Webhook Event (202 Accepted)
-
-**cURL:**
-```bash
-curl -i -X POST http://localhost:3001/webhooks \
-  -H "Content-Type: application/json" \
-  -d '{
-    "eventId": "evt_123",
-    "type": "order.created",
-    "data": {
-      "orderId": "ORD-1001",
-      "customerId": "CUS-42",
-      "simulate": "fail_then_succeed:2"
-    }
-  }'
-```
-
----
-
-### 2. Duplicate Delivery with Different Payload (Idempotency - 202 Accepted)
-
-Delivering the same `eventId` with a different payload preserves the original event in the database and ignores the later payload:
-
-**cURL:**
-```bash
-curl -i -X POST http://localhost:3001/webhooks \
-  -H "Content-Type: application/json" \
-  -d '{
-    "eventId": "evt_123",
-    "type": "order.updated",
-    "data": {
-      "orderId": "ORD-1002",
-      "customerId": "CUS-1002"
-    }
-  }'
-```
-
----
-
-### 3. Schema Validation Error (400 Bad Request)
-
-Sending a payload missing required fields (e.g. missing `eventId` or `orderId`):
-
-**cURL:**
-```bash
-curl -i -X POST http://localhost:3001/webhooks \
-  -H "Content-Type: application/json" \
-  -d '{
-    "type": "order.created",
-    "data": {
-      "customerId": "CUS-42"
-    }
-  }'
-```
-
----
-
-## Events API Testing Commands
-
-The `GET /events` API retrieves ingested webhook events with comprehensive filtering and pagination support.
-
-### Supported Query Parameters
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `page` | Integer | `1` | Page number (1-based, min: 1) |
-| `limit` | Integer | `10` | Records per page (min: 1, max: 100) |
-| `status` | String | - | Filter by status (`pending`, `processing`, `completed`, `failed`) |
-| `type` / `eventType` | String | - | Filter by event type (`order.created`, `order.updated`, etc.) |
-| `orderId` | String | - | Filter by order ID in event payload or processed orders |
-| `customerId` | String | - | Filter by customer ID in event payload |
-| `search` | String | - | Keyword search matching `eventId`, `eventType`, or `lastError` |
-| `startDate` / `from` | ISO Date | - | Filter events received after this timestamp |
-| `endDate` / `to` | ISO Date | - | Filter events received before this timestamp |
-| `sortBy` | String | `receivedAt` | Sort field (`receivedAt`, `updatedAt`, `status`, `eventType`, `totalAttempts`, `eventId`) |
-| `sortOrder` | String | `desc` | Sort direction (`asc` or `desc`) |
-
----
-
-### 1. List Events with Default Pagination
-
-**cURL:**
-```bash
-curl -i -X GET http://localhost:3001/events
-```
-
-
-### 2. List Events with Filters & Pagination
-
-**cURL:**
-```bash
-curl -i -X GET "http://localhost:3001/events?page=1&limit=5&status=completed&type=order.created&orderId=ORD-1001"
-```
-
----
-
-### 3. Get Single Event by ID
-
-**cURL:**
-```bash
-curl -i -X GET http://localhost:3001/events/evt_123
-```
-
----
-
-## Health Check API
-
-The `GET /health` endpoint performs a system and database connectivity health check.
-
-### Health Check (200 OK / 503 Service Unavailable)
-
-**cURL:**
-```bash
-curl -i -X GET http://localhost:3001/health
-```
+👉 **[CURL_TESTS.md](./CURL_TESTS.md)**
 
 ---
 
