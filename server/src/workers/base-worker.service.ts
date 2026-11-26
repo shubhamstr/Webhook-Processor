@@ -217,7 +217,7 @@ export abstract class BaseWorkerService {
       const simulate = payload.simulate as string | undefined;
 
       // Handle test simulation flags
-      if (simulate) {
+      if (simulate && simulate !== 'ok') {
         if (simulate === 'crash') {
           this.logger.warn(
             `[${workerId}] Simulating worker crash on event '${event.eventId}'. Lease will expire and be recovered.`,
@@ -225,7 +225,11 @@ export abstract class BaseWorkerService {
           return;
         }
 
-        if (simulate === 'fail_permanently' || simulate === 'fail') {
+        if (
+          simulate === 'always_fail' ||
+          simulate === 'fail_permanently' ||
+          simulate === 'fail'
+        ) {
           throw new Error(
             `Simulated permanent failure for event ${event.eventId}`,
           );
@@ -237,6 +241,27 @@ export abstract class BaseWorkerService {
             throw new Error(
               `Simulated transient failure (attempt ${attemptNumber}/${failAttempts}) for event ${event.eventId}`,
             );
+          }
+        }
+
+        if (simulate.startsWith('slow:')) {
+          const seconds = parseInt(simulate.split(':')[1], 10) || 1;
+          if (seconds > 0) {
+            this.logger.log(
+              `[${workerId}] Simulating slow execution (${seconds}s) for event '${event.eventId}'`,
+            );
+            // If duration meets or exceeds worker lease duration, extend lease to prevent premature reclaim
+            if (seconds >= this.leaseDurationSeconds) {
+              await this.prisma.webhookEvent.update({
+                where: { id: event.id },
+                data: {
+                  leaseExpiresAt: new Date(
+                    Date.now() + (seconds + this.leaseDurationSeconds) * 1000,
+                  ),
+                },
+              });
+            }
+            await this.sleep(seconds * 1000);
           }
         }
       }
@@ -303,7 +328,7 @@ export abstract class BaseWorkerService {
         },
       });
 
-      if (attemptNumber >= maxAttempts) {
+      if (retryCycle >= maxAttempts) {
         // Exceeded max attempts: mark as permanently failed
         await this.prisma.webhookEvent.update({
           where: { id: event.id },

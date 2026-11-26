@@ -309,6 +309,68 @@ describe('WorkersService', () => {
       // The attempt should be created, but neither completed nor failed update should happen to the event
       expect(mockPrismaService.webhookEvent.update).not.toHaveBeenCalled();
     });
+
+    it('should handle simulate=always_fail by throwing and marking attempt as failure', async () => {
+      const alwaysFailEvent: ClaimedWebhookEvent = {
+        ...sampleEvent,
+        payload: { orderId: 'ORD-ALWAYS-FAIL', simulate: 'always_fail' },
+      };
+
+      (
+        mockPrismaService.processingAttempt.create as jest.Mock
+      ).mockResolvedValueOnce({
+        id: 'attempt-uuid-5',
+        attemptNumber: 1,
+      });
+      (
+        mockPrismaService.processingAttempt.update as jest.Mock
+      ).mockResolvedValueOnce({});
+      (
+        mockPrismaService.webhookEvent.update as jest.Mock
+      ).mockResolvedValueOnce({});
+
+      await service.processEvent(alwaysFailEvent, 'worker-alpha');
+
+      expect(mockPrismaService.processingAttempt.update).toHaveBeenCalledWith({
+        where: { id: 'attempt-uuid-5' },
+        data: expect.objectContaining({
+          result: 'failure',
+          error: expect.stringContaining('Simulated permanent failure'),
+        }),
+      });
+    });
+
+    it('should handle simulate=slow:N and succeed after delay', async () => {
+      const slowEvent: ClaimedWebhookEvent = {
+        ...sampleEvent,
+        payload: { orderId: 'ORD-SLOW', simulate: 'slow:0' },
+      };
+
+      (
+        mockPrismaService.processingAttempt.create as jest.Mock
+      ).mockResolvedValueOnce({
+        id: 'attempt-uuid-6',
+        attemptNumber: 1,
+      });
+      (
+        mockPrismaService.processedOrder.upsert as jest.Mock
+      ).mockResolvedValueOnce({});
+      (
+        mockPrismaService.processingAttempt.update as jest.Mock
+      ).mockResolvedValueOnce({});
+      (
+        mockPrismaService.webhookEvent.update as jest.Mock
+      ).mockResolvedValueOnce({});
+
+      await service.processEvent(slowEvent, 'worker-alpha');
+
+      expect(mockPrismaService.processingAttempt.update).toHaveBeenCalledWith({
+        where: { id: 'attempt-uuid-6' },
+        data: expect.objectContaining({
+          result: 'success',
+        }),
+      });
+    });
   });
 
   describe('worker loop execution', () => {

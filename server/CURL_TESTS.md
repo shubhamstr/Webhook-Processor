@@ -98,8 +98,8 @@ curl -i -X GET http://localhost:3001/stats
 
 The `/webhooks` endpoint accepts incoming payloads, persists them with `status: pending`, enforces idempotency, and immediately returns `202 Accepted`.
 
-### 2.1 Standard Order Created Event
-Ingest a standard `order.created` event.
+### 2.1 Standard Webhook Event Ingestion
+Ingest a standard webhook event with order data.
 
 ```bash
 curl -i -X POST http://localhost:3001/webhooks \
@@ -111,7 +111,8 @@ curl -i -X POST http://localhost:3001/webhooks \
       "orderId": "ORD-1001",
       "customerId": "CUS-42",
       "amount": 199.99,
-      "currency": "USD"
+      "itemsCount": 2,
+      "status": "pending"
     }
   }'
 ```
@@ -120,149 +121,33 @@ curl -i -X POST http://localhost:3001/webhooks \
 ```json
 {
   "status": "accepted",
-  "eventId": "evt_order_1001",
-  "receivedAt": "2026-11-26T22:45:00.000Z"
+  "eventId": "evt_order_1001"
 }
 ```
 
 ---
 
-### 2.2 Order Updated Event
-Ingest an `order.updated` event.
+### 2.2 Worker Simulation: Normal Processing (`simulate: "ok"`)
+Processes successfully. This is also the default behavior when `simulate` is absent.
 
 ```bash
 curl -i -X POST http://localhost:3001/webhooks \
   -H "Content-Type: application/json" \
   -d '{
-    "eventId": "evt_order_update_1001",
-    "type": "order.updated",
-    "data": {
-      "orderId": "ORD-1001",
-      "customerId": "CUS-42",
-      "deliveryStatus": "in_transit",
-      "notes": "Package dispatched from central warehouse"
-    }
-  }'
-```
-
----
-
-### 2.3 Order Cancelled Event
-Ingest an `order.cancelled` event.
-
-```bash
-curl -i -X POST http://localhost:3001/webhooks \
-  -H "Content-Type: application/json" \
-  -d '{
-    "eventId": "evt_order_cancel_1002",
-    "type": "order.cancelled",
-    "data": {
-      "orderId": "ORD-1002",
-      "customerId": "CUS-88",
-      "notes": "Customer requested cancellation before shipment"
-    }
-  }'
-```
-
----
-
-### 2.4 Payment Completed Event
-Ingest a `payment.completed` event.
-
-```bash
-curl -i -X POST http://localhost:3001/webhooks \
-  -H "Content-Type: application/json" \
-  -d '{
-    "eventId": "evt_pay_completed_2001",
-    "type": "payment.completed",
-    "data": {
-      "orderId": "ORD-1001",
-      "customerId": "CUS-42",
-      "amount": 199.99,
-      "currency": "USD",
-      "metadata": {
-        "gateway": "stripe",
-        "chargeId": "ch_3N123456789"
-      }
-    }
-  }'
-```
-
----
-
-### 2.5 Payment Failed Event
-Ingest a `payment.failed` event.
-
-```bash
-curl -i -X POST http://localhost:3001/webhooks \
-  -H "Content-Type: application/json" \
-  -d '{
-    "eventId": "evt_pay_failed_2002",
-    "type": "payment.failed",
-    "data": {
-      "orderId": "ORD-1003",
-      "customerId": "CUS-99",
-      "amount": 49.50,
-      "currency": "USD",
-      "notes": "Card declined: insufficient funds"
-    }
-  }'
-```
-
----
-
-### 2.6 Refund Processed Event
-Ingest a `refund.processed` event.
-
-```bash
-curl -i -X POST http://localhost:3001/webhooks \
-  -H "Content-Type: application/json" \
-  -d '{
-    "eventId": "evt_refund_3001",
-    "type": "refund.processed",
-    "data": {
-      "orderId": "ORD-1002",
-      "customerId": "CUS-88",
-      "amount": 75.00,
-      "currency": "USD",
-      "notes": "Partial refund processed"
-    }
-  }'
-```
-
----
-
-### 2.7 Full Payload with Extended Fields & Metadata
-Ingest a rich payload testing all optional schema fields (`itemsCount`, `customerEmail`, `deliveryStatus`, `metadata`, etc.).
-
-```bash
-curl -i -X POST http://localhost:3001/webhooks \
-  -H "Content-Type: application/json" \
-  -d '{
-    "eventId": "evt_rich_4001",
+    "eventId": "evt_sim_ok_5000",
     "type": "order.created",
     "data": {
-      "orderId": "ORD-9999",
-      "customerId": "CUS-500",
-      "amount": 849.00,
-      "currency": "USD",
-      "itemsCount": 3,
-      "customerEmail": "alex.doe@example.com",
-      "deliveryStatus": "processing",
-      "notes": "Priority express delivery requested",
-      "metadata": {
-        "channel": "mobile_app",
-        "ipAddress": "192.168.1.100",
-        "tags": ["vip", "black_friday"]
-      }
+      "orderId": "ORD-OK-01",
+      "customerId": "CUS-42",
+      "simulate": "ok"
     }
   }'
 ```
 
 ---
 
-### 2.8 Worker Simulation: Transient Failure & Retry (`simulate: "fail_then_succeed:2"`)
-Fails for the first 2 worker processing attempts, triggers exponential backoff retries, and succeeds on attempt 3.
+### 2.3 Worker Simulation: Transient Failure & Retry (`simulate: "fail_then_succeed:N"`)
+Fails for the first N attempts (by attempt number), triggers exponential backoff retries, and succeeds on attempt N+1.
 
 ```bash
 curl -i -X POST http://localhost:3001/webhooks \
@@ -280,8 +165,8 @@ curl -i -X POST http://localhost:3001/webhooks \
 
 ---
 
-### 2.9 Worker Simulation: Permanent Failure (`simulate: "fail_permanently"`)
-Fails continuously until exceeding `max_attempts` (default 5 attempts), marking the event status as `permanently failed` or `failed`.
+### 2.4 Worker Simulation: Permanent Failure (`simulate: "always_fail"`)
+Fails on every attempt continuously until exceeding `max_attempts` (default 5 attempts), marking the event status as `failed`. Also supports aliases `fail_permanently` and `fail`.
 
 ```bash
 curl -i -X POST http://localhost:3001/webhooks \
@@ -292,21 +177,40 @@ curl -i -X POST http://localhost:3001/webhooks \
     "data": {
       "orderId": "ORD-FAIL-01",
       "customerId": "CUS-42",
-      "simulate": "fail_permanently"
+      "simulate": "always_fail"
     }
   }'
 ```
 
 ---
 
-### 2.10 Worker Simulation: Worker Crash & Lease Recovery (`simulate: "crash"`)
+### 2.5 Worker Simulation: Slow Processing (`simulate: "slow:N"`)
+Takes N seconds, then succeeds. If N exceeds the worker lease duration (e.g. 30s), the lease is automatically extended in the database to prevent premature lease reclaim by other workers.
+
+```bash
+curl -i -X POST http://localhost:3001/webhooks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "eventId": "evt_sim_slow_5003",
+    "type": "order.created",
+    "data": {
+      "orderId": "ORD-SLOW-01",
+      "customerId": "CUS-42",
+      "simulate": "slow:5"
+    }
+  }'
+```
+
+---
+
+### 2.6 Worker Simulation: Worker Crash & Lease Recovery (`simulate: "crash"`)
 Simulates an abrupt unhandled worker crash during execution. The leased event will remain in `processing` until its lease expires (`lease_expires_at < NOW()`), after which another worker recovers and re-processes it.
 
 ```bash
 curl -i -X POST http://localhost:3001/webhooks \
   -H "Content-Type: application/json" \
   -d '{
-    "eventId": "evt_sim_crash_5003",
+    "eventId": "evt_sim_crash_5004",
     "type": "order.created",
     "data": {
       "orderId": "ORD-CRASH-01",
@@ -318,7 +222,7 @@ curl -i -X POST http://localhost:3001/webhooks \
 
 ---
 
-### 2.11 Idempotency Test: Exact Duplicate Delivery
+### 2.7 Idempotency Test: Exact Duplicate Delivery
 Send the identical `eventId` with the identical payload a second time. The server safely recognizes the duplicate and returns `202 Accepted` without creating duplicate records.
 
 ```bash
@@ -338,15 +242,13 @@ curl -i -X POST http://localhost:3001/webhooks \
 ```json
 {
   "status": "accepted",
-  "eventId": "evt_order_1001",
-  "receivedAt": "2026-11-26T22:45:00.000Z",
-  "message": "Event already processed or queued (idempotent)"
+  "eventId": "evt_order_1001"
 }
 ```
 
 ---
 
-### 2.12 Deduplication Conflict Test: Same `eventId` with Different Payload
+### 2.8 Deduplication Conflict Test: Same `eventId` with Different Payload
 Re-sending an existing `eventId` with different or altered payload fields. The service preserves the initial payload and ignores subsequent changes.
 
 ```bash
@@ -354,7 +256,7 @@ curl -i -X POST http://localhost:3001/webhooks \
   -H "Content-Type: application/json" \
   -d '{
     "eventId": "evt_order_1001",
-    "type": "order.updated",
+    "type": "order.created",
     "data": {
       "orderId": "ORD-CONFLICT",
       "customerId": "CUS-ALTERED"
@@ -366,15 +268,13 @@ curl -i -X POST http://localhost:3001/webhooks \
 ```json
 {
   "status": "accepted",
-  "eventId": "evt_order_1001",
-  "receivedAt": "2026-11-26T22:45:00.000Z",
-  "message": "Event already processed or queued (idempotent)"
+  "eventId": "evt_order_1001"
 }
 ```
 
 ---
 
-### 2.13 Schema Validation Errors (400 Bad Request)
+### 2.9 Schema Validation Errors (400 Bad Request)
 
 #### A. Missing `eventId`
 ```bash
@@ -460,7 +360,7 @@ Retrieve ingested webhook events with filtering, keyword search, pagination, and
 | `page` | integer | `1` | Page number (1-based, min: 1) |
 | `limit` | integer | `10` | Records per page (min: 1, max: 100) |
 | `status` | string | - | Filter by status (`pending`, `processing`, `completed`, `failed`) |
-| `type` / `eventType` | string | - | Filter by event type (`order.created`, `order.updated`, etc.) |
+| `type` / `eventType` | string | - | Filter by event type (`order.created`) |
 | `orderId` | string | - | Filter by order ID in payload or processed orders |
 | `customerId` | string | - | Filter by customer ID in event payload |
 | `search` | string | - | Text search matching `eventId`, `eventType`, or `lastError` |
@@ -544,7 +444,7 @@ curl -i -X GET "http://localhost:3001/events?status=failed"
 curl -i -X GET "http://localhost:3001/events?type=order.created"
 
 # Using 'eventType' parameter
-curl -i -X GET "http://localhost:3001/events?eventType=payment.completed"
+curl -i -X GET "http://localhost:3001/events?eventType=order.created"
 ```
 
 ---
@@ -830,34 +730,69 @@ curl -i -X POST http://localhost:3001/events/evt_non_existent/retry
 
 ## 7. Windows Command Prompt (CMD) Single-Line Quick Reference
 
-When running cURL in standard Windows `cmd.exe`, JSON double quotes must be escaped or passed as a single line:
+When running cURL in standard Windows `cmd.exe`, JSON double quotes must be escaped with `\"` and sent on a single line:
 
-### Ingest Webhook (CMD format):
+### 7.1 Standard Webhook Ingest (CMD format):
+```cmd
+curl.exe -i -X POST http://localhost:3001/webhooks -H "Content-Type: application/json" -d "{\"eventId\":\"evt_cmd_101\",\"type\":\"order.created\",\"data\":{\"orderId\":\"ORD-CMD-101\",\"customerId\":\"CUS-1\",\"amount\":129.99}}"
+```
+
+### 7.2 Simulation: `simulate: "ok"` (CMD format):
+```cmd
+curl.exe -i -X POST http://localhost:3001/webhooks -H "Content-Type: application/json" -d "{\"eventId\":\"evt_cmd_sim_ok\",\"type\":\"order.created\",\"data\":{\"orderId\":\"ORD-CMD-OK\",\"customerId\":\"CUS-1\",\"simulate\":\"ok\"}}"
+```
+
+### 7.3 Simulation: `simulate: "fail_then_succeed:2"` (CMD format):
+```cmd
+curl.exe -i -X POST http://localhost:3001/webhooks -H "Content-Type: application/json" -d "{\"eventId\":\"evt_cmd_sim_retry\",\"type\":\"order.created\",\"data\":{\"orderId\":\"ORD-CMD-RETRY\",\"customerId\":\"CUS-1\",\"simulate\":\"fail_then_succeed:2\"}}"
+```
+
+### 7.4 Simulation: `simulate: "always_fail"` (CMD format):
+```cmd
+curl.exe -i -X POST http://localhost:3001/webhooks -H "Content-Type: application/json" -d "{\"eventId\":\"evt_cmd_sim_fail\",\"type\":\"order.created\",\"data\":{\"orderId\":\"ORD-CMD-FAIL\",\"customerId\":\"CUS-1\",\"simulate\":\"always_fail\"}}"
+```
+
+### 7.5 Simulation: `simulate: "slow:5"` (CMD format):
+```cmd
+curl.exe -i -X POST http://localhost:3001/webhooks -H "Content-Type: application/json" -d "{\"eventId\":\"evt_cmd_sim_slow\",\"type\":\"order.created\",\"data\":{\"orderId\":\"ORD-CMD-SLOW\",\"customerId\":\"CUS-1\",\"simulate\":\"slow:5\"}}"
+```
+
+### 7.6 Simulation: `simulate: "crash"` (CMD format):
+```cmd
+curl.exe -i -X POST http://localhost:3001/webhooks -H "Content-Type: application/json" -d "{\"eventId\":\"evt_cmd_sim_crash\",\"type\":\"order.created\",\"data\":{\"orderId\":\"ORD-CMD-CRASH\",\"customerId\":\"CUS-1\",\"simulate\":\"crash\"}}"
+```
+
+### 7.7 Idempotency Exact Duplicate Test (CMD format):
 ```cmd
 curl.exe -i -X POST http://localhost:3001/webhooks -H "Content-Type: application/json" -d "{\"eventId\":\"evt_cmd_101\",\"type\":\"order.created\",\"data\":{\"orderId\":\"ORD-CMD-101\",\"customerId\":\"CUS-1\"}}"
 ```
 
-### Health Check (CMD format):
+### 7.8 Fetch Attempt History (CMD format):
 ```cmd
-curl.exe -i -X GET http://localhost:3001/health
+curl.exe -i -X GET http://localhost:3001/events/evt_cmd_sim_retry/attempts
 ```
 
-### Dashboard Stats (CMD format):
+### 7.9 Retry Permanently Failed Event (CMD format):
 ```cmd
-curl.exe -i -X GET http://localhost:3001/stats
+curl.exe -i -X POST http://localhost:3001/events/evt_cmd_sim_fail/retry
 ```
 
-### List Events (CMD format):
-```cmd
-curl.exe -i -X GET "http://localhost:3001/events?status=completed&limit=5"
-```
-
-### Single Event Details (CMD format):
+### 7.10 Single Event Details (CMD format):
 ```cmd
 curl.exe -i -X GET http://localhost:3001/events/evt_cmd_101
 ```
 
-### Retry Failed Event (CMD format):
+### 7.11 Health Check (CMD format):
 ```cmd
-curl.exe -i -X POST http://localhost:3001/events/evt_cmd_101/retry
+curl.exe -i -X GET http://localhost:3001/health
+```
+
+### 7.12 Dashboard Stats (CMD format):
+```cmd
+curl.exe -i -X GET http://localhost:3001/stats
+```
+
+### 7.13 List Events with Filters (CMD format):
+```cmd
+curl.exe -i -X GET "http://localhost:3001/events?status=completed&limit=5"
 ```
