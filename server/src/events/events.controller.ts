@@ -1,4 +1,12 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { GetEventsQueryDto } from './dto';
 import { EventsService } from './events.service';
 
@@ -14,5 +22,11 @@ export class EventsController {
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.eventsService.findOne(id);
+  }
+
+  @Post(':id/retry')
+  @HttpCode(HttpStatus.OK)
+  async retry(@Param('id') id: string) {
+    return this.eventsService.retry(id);
   }
 }

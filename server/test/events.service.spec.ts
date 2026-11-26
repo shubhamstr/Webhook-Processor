@@ -14,6 +14,7 @@ describe('EventsService', () => {
       count: jest.fn(),
       findMany: jest.fn(),
       findFirst: jest.fn(),
+      update: jest.fn(),
     },
   };
 
@@ -255,6 +256,55 @@ describe('EventsService', () => {
         permanentlyFailed: 5,
         completelyFailed: 5,
       });
+    });
+  });
+
+  describe('retry', () => {
+    it('should reset failed event to pending state and return it', async () => {
+      const mockExisting = {
+        id: 'uuid-1',
+        eventId: 'evt_100',
+        status: 'failed',
+      };
+      const mockUpdated = {
+        id: 'uuid-1',
+        eventId: 'evt_100',
+        status: 'pending',
+        cycleAttempts: 0,
+        processingAttempts: [],
+        processedOrder: null,
+      };
+
+      mockPrismaService.webhookEvent.findFirst.mockResolvedValue(mockExisting);
+      mockPrismaService.webhookEvent.update.mockResolvedValue(mockUpdated);
+
+      const result = await service.retry('evt_100');
+
+      expect(prisma.webhookEvent.findFirst).toHaveBeenCalledWith({
+        where: { eventId: 'evt_100' },
+      });
+      expect(prisma.webhookEvent.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'uuid-1' },
+          data: expect.objectContaining({
+            status: 'pending',
+            cycleAttempts: 0,
+            leaseOwner: null,
+            leaseToken: null,
+            leaseExpiresAt: null,
+            lastError: null,
+          }),
+        }),
+      );
+      expect(result).toEqual(mockUpdated);
+    });
+
+    it('should throw NotFoundException if event to retry does not exist', async () => {
+      mockPrismaService.webhookEvent.findFirst.mockResolvedValue(null);
+
+      await expect(service.retry('evt_missing')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

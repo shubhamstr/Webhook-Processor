@@ -12,6 +12,7 @@ describe('EventsController', () => {
   const mockEventsService = {
     findAll: jest.fn(),
     findOne: jest.fn(),
+    retry: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -93,6 +94,24 @@ describe('EventsController', () => {
       const result = await controller.findOne(eventId);
 
       expect(service.findOne).toHaveBeenCalledWith(eventId);
+      expect(result).toEqual(expectedEvent);
+    });
+  });
+
+  describe('retry', () => {
+    it('should trigger retry and return the updated event', async () => {
+      const eventId = 'evt_123';
+      const expectedEvent = {
+        id: 'uuid-1',
+        eventId: 'evt_123',
+        status: 'pending',
+      };
+
+      mockEventsService.retry.mockResolvedValue(expectedEvent);
+
+      const result = await controller.retry(eventId);
+
+      expect(service.retry).toHaveBeenCalledWith(eventId);
       expect(result).toEqual(expectedEvent);
     });
   });

@@ -173,6 +173,50 @@ export class EventsService {
     return event;
   }
 
+  async retry(id: string) {
+    const isUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        id,
+      );
+
+    const event = await this.prisma.webhookEvent.findFirst({
+      where: isUuid
+        ? {
+            OR: [{ id }, { eventId: id }],
+          }
+        : { eventId: id },
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Event with ID '${id}' not found`);
+    }
+
+    const updated = await this.prisma.webhookEvent.update({
+      where: { id: event.id },
+      data: {
+        status: 'pending',
+        cycleAttempts: 0,
+        nextAttemptAt: new Date(),
+        leaseOwner: null,
+        leaseToken: null,
+        leaseExpiresAt: null,
+        lastError: null,
+        updatedAt: new Date(),
+      },
+      include: {
+        processingAttempts: {
+          orderBy: {
+            attemptNumber: 'asc',
+          },
+        },
+        processedOrder: true,
+      },
+    });
+
+    this.logger.log(`Event '${event.eventId}' reset to 'pending' for retry`);
+    return updated;
+  }
+
   async getStats(): Promise<DashboardStatsResponse> {
     const [total, pending, processing, completed, failed] = await Promise.all([
       this.prisma.webhookEvent.count(),
