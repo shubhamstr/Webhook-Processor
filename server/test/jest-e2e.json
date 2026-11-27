@@ -5,7 +5,7 @@
   "setupFiles": ["reflect-metadata"],
   "moduleDirectories": ["node_modules", "<rootDir>/../node_modules"],
   "testEnvironment": "node",
-  "testRegex": ".e2e-spec.ts$",
+  "testRegex": ".*\\.spec\\.ts$",
   "transform": {
     "^.+\\.(t|j)s$": [
       "ts-jest",
