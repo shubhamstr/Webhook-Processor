@@ -7,11 +7,9 @@
     "docker:up": "docker compose up --build",
     "docker:up:d": "docker compose up --build -d",
     "docker:down": "docker compose down",
-    "docker:down:v": "docker compose down -v",
     "docker:logs": "docker compose logs -f",
-    "docker:ps": "docker compose ps",
-    "docker:restart": "docker compose restart",
-    "docker:rebuild": "docker compose build --no-cache"
+    "test:burst": "npm --prefix server run test:burst",
+    "test:burst:slow": "npm --prefix server run test:burst:slow"
   },
   "keywords": [
     "webhook",
