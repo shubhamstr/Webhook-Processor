@@ -6,6 +6,7 @@
 #   3. worker-1  : Standalone background queue worker 1
 #   4. worker-2  : Standalone background queue worker 2
 #   5. client    : Next.js frontend dashboard (Port 3000)
+#   6. studio    : Prisma Studio Database GUI (Port 5555, optional via profile)
 # ==============================================================================
 
 services:
@@ -131,6 +132,30 @@ services:
     depends_on:
       server:
         condition: service_healthy
+    networks:
+      - webhook-network
+
+  # ----------------------------------------------------------------------------
+  # Prisma Studio Database GUI (Optional - runs on-demand via --profile studio)
+  # ----------------------------------------------------------------------------
+  studio:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    image: webhook-processor-server:latest
+    container_name: webhook-prisma-studio
+    restart: unless-stopped
+    profiles:
+      - studio
+    ports:
+      - "5555:5555"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-webhook-processor}?schema=public
+      NODE_ENV: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: npx prisma studio --hostname 0.0.0.0 --port 5555 --browser none
     networks:
       - webhook-network
 

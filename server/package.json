@@ -26,6 +26,8 @@
     "docker:up:d": "docker compose -f ../docker-compose.yml up --build -d",
     "docker:down": "docker compose -f ../docker-compose.yml down",
     "docker:logs": "docker compose -f ../docker-compose.yml logs -f",
+    "docker:studio": "docker compose -f ../docker-compose.yml --profile studio up -d studio",
+    "docker:studio:down": "docker compose -f ../docker-compose.yml stop studio",
     "lint": "oxlint --type-aware src/ test/",
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js",
     "test:burst": "node scripts/burst-test.js",

@@ -8,6 +8,8 @@
     "docker:up:d": "docker compose up --build -d",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f",
+    "docker:studio": "docker compose --profile studio up -d studio",
+    "docker:studio:down": "docker compose stop studio",
     "test:burst": "npm --prefix server run test:burst",
     "test:burst:slow": "npm --prefix server run test:burst:slow"
   },
